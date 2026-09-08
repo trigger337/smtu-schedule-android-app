@@ -78,7 +78,7 @@ public final class TimerWidgetProvider extends AppWidgetProvider {
         return rv;
     }
 
-    private static boolean isTomorrow(Now.State st) {
+    static boolean isTomorrow(Now.State st) {
         Calendar t = Calendar.getInstance();
         t.set(Calendar.HOUR_OF_DAY, 0);
         t.set(Calendar.MINUTE, 0);

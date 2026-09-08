@@ -41,7 +41,9 @@ public final class WidgetUpdater {
         AppWidgetManager awm = AppWidgetManager.getInstance(app);
         int[] ids = awm.getAppWidgetIds(new ComponentName(app, TimerWidgetProvider.class));
         for (int id : ids) awm.updateAppWidget(id, TimerWidgetProvider.render(app));
-        if (ids.length > 0) maybeRefresh(app);
+        int[] nameIds = awm.getAppWidgetIds(new ComponentName(app, NameWidgetProvider.class));
+        for (int id : nameIds) awm.updateAppWidget(id, NameWidgetProvider.render(app));
+        if (ids.length + nameIds.length > 0) maybeRefresh(app);
     }
 
     /** Background schedule refetch when the cache is stale (throttled hourly). */

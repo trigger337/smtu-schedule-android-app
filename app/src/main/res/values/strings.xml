@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="widget_timer_desc">Кольцо-таймер: синее — идёт пара, жёлтое — перемена</string>
+    <string name="widget_name_desc">Сейчас или следующая пара: предмет, время и обратный отсчёт</string>
 </resources>
