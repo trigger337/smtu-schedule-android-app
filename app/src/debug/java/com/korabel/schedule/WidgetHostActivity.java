@@ -29,7 +29,9 @@ public final class WidgetHostActivity extends Activity {
         host = new AppWidgetHost(this, 5001);
         final int which = getIntent().getIntExtra("widget", 0);
         ComponentName provider = new ComponentName(this,
-                which == 1 ? NameWidgetProvider.class : TimerWidgetProvider.class);
+                which == 1 ? NameWidgetProvider.class
+                : which == 2 ? AgendaWidgetProvider.class
+                : TimerWidgetProvider.class);
         int[] existing = awm.getAppWidgetIds(provider);
         if (existing.length > 0) { show(existing[0], which); return; }
         int id = host.allocateAppWidgetId();
@@ -60,8 +62,8 @@ public final class WidgetHostActivity extends Activity {
         root.setGravity(Gravity.CENTER);
         root.setBackgroundColor(0xFF33691E);
         android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
-        int w = Math.round((which == 1 ? 110 : 160) * dm.density);
-        int h = Math.round((which == 1 ? 200 : 160) * dm.density);
+        int w = Math.round((which == 1 ? 110 : which == 2 ? 180 : 160) * dm.density);
+        int h = Math.round((which == 1 ? 200 : which == 2 ? 240 : 160) * dm.density);
         root.addView(v, new LinearLayout.LayoutParams(w, h));
         setContentView(root);
     }
