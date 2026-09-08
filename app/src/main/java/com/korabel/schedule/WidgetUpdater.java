@@ -10,10 +10,6 @@ import android.content.SharedPreferences;
 
 import java.io.File;
 import java.util.Calendar;
-import java.util.Collections;
-import java.util.List;
-
-import com.korabel.schedule.Smtu.Slot;
 
 /**
  * Renders every bound widget and keeps a single self-rescheduling alarm so
@@ -66,11 +62,8 @@ public final class WidgetUpdater {
     /** Alarm for the next state change; per-minute only during a lesson / short break. */
     static void schedule(Context ctx) {
         final Context app = ctx.getApplicationContext();
-        SharedPreferences p = app.getSharedPreferences("sched", Context.MODE_PRIVATE);
-        String gid = p.getString(P_GID, null);
-        List<Slot> slots = gid == null ? Collections.<Slot>emptyList()
-                : Smtu.loadCacheSync(app, false, gid);
-        Now.State st = Now.compute(app, slots);
+        Now.State st = Now.load(app);
+        if (st.gid == null) return;   // nothing scheduled without a group
 
         long now = System.currentTimeMillis();
         long tick = Long.MAX_VALUE;

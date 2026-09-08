@@ -65,8 +65,8 @@ public final class MainActivity extends Activity {
     private String groupId, groupName;
     private List<Slot> slots = new ArrayList<>();
     private boolean dayMode = false;
-    private Calendar anchor = monday(today());                 // Monday of shown week
-    private int dayOffset = (today().get(Calendar.DAY_OF_WEEK) + 5) % 7; // Mon=0..Sun=6
+    private Calendar anchor = Dates.monday(Dates.today());      // Monday of shown week
+    private int dayOffset = (Dates.today().get(Calendar.DAY_OF_WEEK) + 5) % 7; // Mon=0..Sun=6
 
     private int dp(float v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
@@ -110,19 +110,6 @@ public final class MainActivity extends Activity {
             if (error != null) toast(error);
             WidgetUpdater.poke(this);
         });
-    }
-
-    /** Slots occurring on a calendar day: exact-date match, or parity+weekday for rows without a date list. */
-    private List<Slot> slotsOfDay(Calendar day) {
-        String key = Smtu.fmtRu(day);
-        String dayName = dayName(day);
-        boolean upper = Smtu.isUpperWeek(this, day);
-        List<Slot> out = new ArrayList<>();
-        for (Slot s : slots) {
-            if (s.dates.contains(key)) { out.add(s); continue; }
-            if (s.dates.isEmpty() && s.upper == upper && s.day.equalsIgnoreCase(dayName)) out.add(s);
-        }
-        return out;
     }
 
     // ------------------------------------------------------------------- ui
@@ -245,14 +232,14 @@ public final class MainActivity extends Activity {
 
         List<Object> rows = new ArrayList<>();
         if (dayMode) {
-            Calendar day = plus(anchor, dayOffset);
-            rows.add(new DayHeader(day, isToday(day)));
-            rows.addAll(slotsOfDay(day));
+            Calendar day = Dates.plus(anchor, dayOffset);
+            rows.add(new DayHeader(day, Dates.isToday(day)));
+            rows.addAll(Now.slotsOf(this, slots, day));
         } else {
             for (int i = 0; i < 7; i++) {
-                Calendar day = plus(anchor, i);
-                rows.add(new DayHeader(day, isToday(day)));
-                rows.addAll(slotsOfDay(day));
+                Calendar day = Dates.plus(anchor, i);
+                rows.add(new DayHeader(day, Dates.isToday(day)));
+                rows.addAll(Now.slotsOf(this, slots, day));
             }
         }
         tvEmpty.setText(slots.isEmpty()
@@ -260,7 +247,7 @@ public final class MainActivity extends Activity {
                 : "Занятий нет.");
 
         tvRange.setText(rangeText());
-        boolean upper = Smtu.isUpperWeek(this, dayMode ? plus(anchor, dayOffset) : anchor);
+        boolean upper = Smtu.isUpperWeek(this, dayMode ? Dates.plus(anchor, dayOffset) : anchor);
         tvWeek.setText(upper ? "ВЕРХНЯЯ НЕДЕЛЯ" : "НИЖНЯЯ НЕДЕЛЯ");
         tvWeek.setBackgroundColor(upper ? getColor(R.color.week_upper) : getColor(R.color.week_lower));
         tvWeek.setTextColor(Color.WHITE);
@@ -271,10 +258,10 @@ public final class MainActivity extends Activity {
     private String rangeText() {
         SimpleDateFormat df = new SimpleDateFormat("d MMMM", RU);
         if (dayMode)
-            return new SimpleDateFormat("d MMMM, EEEE", RU).format(plus(anchor, dayOffset).getTime());
+            return new SimpleDateFormat("d MMMM, EEEE", Dates.RU).format(Dates.plus(anchor, dayOffset).getTime());
         String a = df.format(anchor.getTime());
-        String b = df.format(plus(anchor, 6).getTime());
-        return sameMonth(anchor, plus(anchor, 6)) ? a.split(" ")[0] + " – " + b : a + " – " + b;
+        String b = df.format(Dates.plus(anchor, 6).getTime());
+        return sameMonth(anchor, Dates.plus(anchor, 6)) ? a.split(" ")[0] + " – " + b : a + " – " + b;
     }
 
     private static boolean sameMonth(Calendar a, Calendar b) {
@@ -506,7 +493,7 @@ public final class MainActivity extends Activity {
             Slot s = of.get(i);
             StringBuilder it = new StringBuilder();
             if (!s.dates.isEmpty()) it.append(s.dates.get(0));
-            else it.append(shortDay(s.day));
+            else it.append(Dates.shortDay(s.day));
             it.append(" · ").append(s.time.replace(" - ", " – "))
               .append(" · ").append(s.subject);
             if (!s.type.isEmpty()) it.append(" (").append(s.type).append(")");
@@ -562,8 +549,8 @@ public final class MainActivity extends Activity {
                 .putString(PREF_GID, picked.id).putString(PREF_GNAME, picked.name).apply();
             groupId = picked.id;
             groupName = picked.name;
-            anchor = monday(today());
-            dayOffset = (today().get(Calendar.DAY_OF_WEEK) + 5) % 7;
+            anchor = Dates.monday(Dates.today());
+            dayOffset = (Dates.today().get(Calendar.DAY_OF_WEEK) + 5) % 7;
             dlg.dismiss();
             load();
         });
@@ -642,40 +629,4 @@ public final class MainActivity extends Activity {
     // ----------------------------------------------------------------- utils
 
     private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_SHORT).show(); }
-
-    private boolean isToday(Calendar c) {
-        Calendar t = today();
-        return t.get(Calendar.YEAR) == c.get(Calendar.YEAR)
-            && t.get(Calendar.DAY_OF_YEAR) == c.get(Calendar.DAY_OF_YEAR);
-    }
-
-    private static Calendar today() {
-        Calendar c = Calendar.getInstance();
-        c.set(Calendar.HOUR_OF_DAY, 0); c.set(Calendar.MINUTE, 0);
-        c.set(Calendar.SECOND, 0); c.set(Calendar.MILLISECOND, 0);
-        return c;
-    }
-
-    /** Monday 00:00 of the week containing c. */
-    private static Calendar monday(Calendar c) {
-        Calendar r = (Calendar) c.clone();
-        int shift = (r.get(Calendar.DAY_OF_WEEK) + 5) % 7; // Mon=0 .. Sun=6
-        r.add(Calendar.DAY_OF_YEAR, -shift);
-        return r;
-    }
-
-    private static Calendar plus(Calendar c, int days) {
-        Calendar r = (Calendar) c.clone();
-        r.add(Calendar.DAY_OF_YEAR, days);
-        return r;
-    }
-
-    /** "Понедельник" for a Calendar, to match Slot.day. */
-    private static String dayName(Calendar c) {
-        return new SimpleDateFormat("EEEE", RU).format(c.getTime());
-    }
-
-    private static String shortDay(String day) {
-        return day.length() <= 3 ? day : day.substring(0, 3);
-    }
 }

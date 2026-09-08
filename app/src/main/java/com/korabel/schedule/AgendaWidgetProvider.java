@@ -10,7 +10,7 @@ import android.widget.RemoteViews;
 
 import com.korabel.schedule.Smtu.Slot;
 
-import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -36,13 +36,10 @@ public final class AgendaWidgetProvider extends AppWidgetProvider {
 
     static RemoteViews render(Context app) {
         RemoteViews rv = new RemoteViews(app.getPackageName(), R.layout.widget_agenda);
-        String gid = app.getSharedPreferences("sched", Context.MODE_PRIVATE).getString("groupId", null);
-        List<Slot> slots = gid == null ? Collections.<Slot>emptyList()
-                : Smtu.loadCacheSync(app, false, gid);
-        Now.State st = Now.compute(app, slots);
+        Now.State st = Now.load(app);
 
         if (st.kind == Now.NONE) {
-            rv.setTextViewText(R.id.wa_header, gid == null ? "НЕТ ГРУППЫ" : "ПАР НЕТ");
+            rv.setTextViewText(R.id.wa_header, st.gid == null ? "НЕТ ГРУППЫ" : "ПАР НЕТ");
             block(rv, false);
             rows(rv, Collections.<Slot>emptyList());
             click(rv, app);
@@ -54,36 +51,38 @@ public final class AgendaWidgetProvider extends AppWidgetProvider {
             rv.setTextViewText(R.id.wa_header, "СЕЙЧАС");
             rv.setTextViewText(R.id.wa_subject, st.current.subject);
             rv.setTextViewText(R.id.wa_meta,
-                    compact(st.current.time) + " · " + roomFirst(st.current.room));
+                    Now.compactTime(st.current.time) + " · " + Now.roomFirst(st.current.room));
             int total = Now.endMin(st.current) - Now.startMin(st.current);
             rv.setInt(R.id.wa_bar, "setProgress", total > 0
                     ? Math.max(0, Math.min(100, st.remainMin * 100 / total)) : 0);
-            rv.setViewVisibility(R.id.wa_bar, View.VISIBLE);
             rv.setViewVisibility(R.id.wa_subject, View.VISIBLE);
             rv.setViewVisibility(R.id.wa_meta, View.VISIBLE);
+            rv.setViewVisibility(R.id.wa_bar, View.VISIBLE);
             rv.setViewVisibility(R.id.wa_nh, View.VISIBLE);
             rv.setTextViewText(R.id.wa_nh, "ДАЛЕЕ");
-            upcoming = new java.util.ArrayList<>();
-            for (Slot s : st.today)
-                if (Now.startMin(s) > st.nowMin) upcoming.add(s);
+            upcoming = afterNow(st.today, st.nowMin);
         } else if (st.kind == Now.AFTER) {
-            String day = TimerWidgetProvider.isTomorrow(st) ? "ЗАВТРА"
-                    : new SimpleDateFormat("EEEE", new Locale("ru"))
-                            .format(st.nextDay.getTime()).toUpperCase(new Locale("ru"));
+            String day = Now.isTomorrow(st) ? "ЗАВТРА"
+                    : Now.weekdayName(st.nextDay).toUpperCase(new Locale("ru"));
             rv.setTextViewText(R.id.wa_header, day);
             block(rv, false);
-            upcoming = Now.slotsOf(app, slots, st.nextDay);
+            upcoming = Now.slotsOf(app, Smtu.loadCacheSync(app, false, st.gid), st.nextDay);
             Collections.sort(upcoming, (a, b) -> Now.startMin(a) - Now.startMin(b));
         } else {                                   // BREAK / BEFORE: list the rest of today
             rv.setTextViewText(R.id.wa_header, "ДАЛЕЕ");
             block(rv, false);
-            upcoming = new java.util.ArrayList<>();
-            for (Slot s : st.today)
-                if (Now.startMin(s) > st.nowMin) upcoming.add(s);
+            upcoming = afterNow(st.today, st.nowMin);
         }
         rows(rv, upcoming);
         click(rv, app);
         return rv;
+    }
+
+    private static List<Slot> afterNow(List<Slot> today, int nowMin) {
+        List<Slot> out = new ArrayList<>();
+        for (Slot s : today)
+            if (Now.startMin(s) > nowMin) out.add(s);
+        return out;
     }
 
     /** Show/hide the «Сейчас» block (subject, meta line, progress bar). */
@@ -103,19 +102,8 @@ public final class AgendaWidgetProvider extends AppWidgetProvider {
             Slot s = list.get(i);
             rv.setTextViewText(ROW_TIME[i], s.time.length() >= 5 ? s.time.substring(0, 5) : s.time);
             rv.setTextViewText(ROW_SUBJ[i], s.subject);
-            rv.setTextViewText(ROW_ROOM[i], roomFirst(s.room));
+            rv.setTextViewText(ROW_ROOM[i], Now.roomFirst(s.room));
         }
-    }
-
-    private static String compact(String t) {
-        return t.replace(" ", "").replace('-', '–');
-    }
-
-    /** "509 Корпус Г" -> "509"; "каф.ИЯ Корпус У" -> "каф.ИЯ". */
-    private static String roomFirst(String room) {
-        if (room == null || room.isEmpty()) return "";
-        int sp = room.indexOf(' ');
-        return sp > 0 ? room.substring(0, sp) : room;
     }
 
     private static void click(RemoteViews rv, Context app) {

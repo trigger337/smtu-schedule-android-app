@@ -10,9 +10,6 @@ import android.widget.RemoteViews;
 
 import com.korabel.schedule.Smtu.Slot;
 
-import java.text.SimpleDateFormat;
-import java.util.Collections;
-import java.util.List;
 import java.util.Locale;
 
 /**
@@ -31,10 +28,7 @@ public final class NameWidgetProvider extends AppWidgetProvider {
 
     static RemoteViews render(Context app) {
         RemoteViews rv = new RemoteViews(app.getPackageName(), R.layout.widget_name);
-        String gid = app.getSharedPreferences("sched", Context.MODE_PRIVATE).getString("groupId", null);
-        List<Slot> slots = gid == null ? Collections.<Slot>emptyList()
-                : Smtu.loadCacheSync(app, false, gid);
-        Now.State st = Now.compute(app, slots);
+        Now.State st = Now.load(app);
 
         Slot shown;
         String label, extra;
@@ -50,18 +44,19 @@ public final class NameWidgetProvider extends AppWidgetProvider {
             case Now.BEFORE:
                 shown = st.next;
                 label = "Следующая пара";
-                extra = st.remainMin <= 90 ? inMin(st.remainMin) : roomOf(st.next);
+                extra = st.remainMin <= 90 ? inMin(st.remainMin)
+                        : audOf(st.next);
                 accent = R.color.w_ring_break;
                 break;
             case Now.AFTER:
                 shown = st.next;
-                label = TimerWidgetProvider.isTomorrow(st) ? "Завтра"
-                        : new SimpleDateFormat("EEEE", new Locale("ru")).format(st.nextDay.getTime());
-                extra = roomOf(st.next);
+                label = Now.isTomorrow(st) ? "Завтра"
+                        : Now.weekdayName(st.nextDay);
+                extra = audOf(st.next);
                 accent = R.color.w_ring_break;
                 break;
             default:
-                rv.setTextViewText(R.id.wn_label, gid == null ? "НЕТ ГРУППЫ" : "ПАР НЕТ");
+                rv.setTextViewText(R.id.wn_label, st.gid == null ? "НЕТ ГРУППЫ" : "ПАР НЕТ");
                 rv.setTextViewText(R.id.wn_subject, "");
                 rv.setTextViewText(R.id.wn_time, "");
                 rv.setTextViewText(R.id.wn_extra, "");
@@ -71,7 +66,7 @@ public final class NameWidgetProvider extends AppWidgetProvider {
         }
         rv.setTextViewText(R.id.wn_label, label.toUpperCase(new Locale("ru")));
         rv.setTextViewText(R.id.wn_subject, shown.subject);
-        rv.setTextViewText(R.id.wn_time, shown.time.replace(" ", "").replace('-', '–'));
+        rv.setTextViewText(R.id.wn_time, Now.compactTime(shown.time));
         rv.setTextViewText(R.id.wn_extra, extra);
         rv.setTextColor(R.id.wn_label, app.getColor(accent));
         rv.setTextColor(R.id.wn_extra,
@@ -90,11 +85,10 @@ public final class NameWidgetProvider extends AppWidgetProvider {
         return "через " + m + " мин";
     }
 
-    /** "509 Корпус Г" -> "ауд. 509"; empty when the slot has no room. */
-    private static String roomOf(Slot s) {
-        if (s.room == null || s.room.isEmpty()) return "";
-        int sp = s.room.indexOf(' ');
-        return "ауд. " + (sp > 0 ? s.room.substring(0, sp) : s.room);
+    /** "ауд. 509"; empty when the slot has no room. */
+    private static String audOf(Slot s) {
+        String r = Now.roomFirst(s.room);
+        return r.isEmpty() ? "" : "ауд. " + r;
     }
 
     private static void stripe(RemoteViews rv, int which) {

@@ -8,14 +8,6 @@ import android.content.Intent;
 import android.view.View;
 import android.widget.RemoteViews;
 
-import com.korabel.schedule.Smtu.Slot;
-
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-
 /**
  * 1x1 radial countdown: a draining blue ring while a lesson runs, a filling
  * yellow ring during a break, and the next lesson time once the day is over.
@@ -31,10 +23,7 @@ public final class TimerWidgetProvider extends AppWidgetProvider {
 
     static RemoteViews render(Context app) {
         RemoteViews rv = new RemoteViews(app.getPackageName(), R.layout.widget_timer);
-        String gid = app.getSharedPreferences("sched", Context.MODE_PRIVATE).getString("groupId", null);
-        List<Slot> slots = gid == null ? Collections.<Slot>emptyList()
-                : Smtu.loadCacheSync(app, false, gid);
-        Now.State st = Now.compute(app, slots);
+        Now.State st = Now.load(app);
 
         String main = "—";
         String sub = "";
@@ -64,11 +53,10 @@ public final class TimerWidgetProvider extends AppWidgetProvider {
                 rv.setViewVisibility(R.id.wt_ring_b, View.GONE);
                 rv.setViewVisibility(R.id.wt_ring_y, View.GONE);
                 main = st.next.time.substring(0, 5);
-                sub = isTomorrow(st) ? "завтра"
-                        : new SimpleDateFormat("EEEE", new Locale("ru")).format(st.nextDay.getTime());
+                sub = Now.isTomorrow(st) ? "завтра" : Now.weekdayName(st.nextDay);
                 break;
             default:
-                sub = gid == null ? "нет группы" : "нет пар";
+                sub = st.gid == null ? "нет группы" : "нет пар";
         }
         rv.setTextViewText(R.id.wt_main, main);
         rv.setTextViewText(R.id.wt_sub, sub);
@@ -76,16 +64,6 @@ public final class TimerWidgetProvider extends AppWidgetProvider {
                 new Intent(app, MainActivity.class),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         return rv;
-    }
-
-    static boolean isTomorrow(Now.State st) {
-        Calendar t = Calendar.getInstance();
-        t.set(Calendar.HOUR_OF_DAY, 0);
-        t.set(Calendar.MINUTE, 0);
-        t.set(Calendar.SECOND, 0);
-        t.set(Calendar.MILLISECOND, 0);
-        t.add(Calendar.DAY_OF_YEAR, 1);
-        return t.getTimeInMillis() == st.nextDay.getTimeInMillis();
     }
 
     private static int pct(int part, int whole) {

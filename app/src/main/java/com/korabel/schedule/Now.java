@@ -29,9 +29,21 @@ public final class Now {
         public int remainMin;     // ONGOING: till lesson end; BREAK/BEFORE: till next start
         public int gapMin;        // BREAK/BEFORE: length of the gap the ring illustrates
         public List<Slot> today = new ArrayList<>(); // today's slots sorted by start
+        public String gid;        // saved group id, or null — for "no group" rendering
     }
 
     private Now() { }
+
+    /** Prefs + cache + compute in one call — the single widget data path. */
+    public static State load(Context ctx) {
+        String gid = ctx.getSharedPreferences("sched", Context.MODE_PRIVATE)
+                .getString("groupId", null);
+        List<Slot> all = gid == null ? Collections.<Slot>emptyList()
+                : Smtu.loadCacheSync(ctx, false, gid);
+        State st = compute(ctx, all);
+        st.gid = gid;
+        return st;
+    }
 
     /** "10:10" -> 610 minutes; -1 if unparseable. */
     public static int hm(String s) {
@@ -52,6 +64,30 @@ public final class Now {
     public static int endMin(Slot s) {
         int d = s.time.indexOf('-');
         return d < 0 ? -1 : hm(s.time.substring(d + 1));
+    }
+
+    /** Next day with lessons is tomorrow. */
+    public static boolean isTomorrow(State st) {
+        Calendar t = Dates.today();
+        t.add(Calendar.DAY_OF_YEAR, 1);
+        return t.getTimeInMillis() == st.nextDay.getTimeInMillis();
+    }
+
+    /** "10:10 - 11:40" -> "10:10–11:40". */
+    public static String compactTime(String t) {
+        return t.replace(" ", "").replace('-', '–');
+    }
+
+    /** "509 Корпус Г" -> "509"; "каф.ИЯ Корпус У" -> "каф.ИЯ". */
+    public static String roomFirst(String room) {
+        if (room == null || room.isEmpty()) return "";
+        int sp = room.indexOf(' ');
+        return sp > 0 ? room.substring(0, sp) : room;
+    }
+
+    /** "среда" — lowercase ru weekday name. */
+    public static String weekdayName(Calendar c) {
+        return new SimpleDateFormat("EEEE", Dates.RU).format(c.getTime());
     }
 
     public static State compute(Context ctx, List<Slot> all) {
@@ -110,7 +146,7 @@ public final class Now {
     /** Slots occurring on a calendar day: exact-date match, or parity+weekday fallback. */
     public static List<Slot> slotsOf(Context ctx, List<Slot> all, Calendar day) {
         String key = Smtu.fmtRu(day);
-        String name = new SimpleDateFormat("EEEE", new Locale("ru")).format(day.getTime());
+        String name = Dates.dayName(day);
         boolean upper = Smtu.isUpperWeek(ctx, day);
         List<Slot> out = new ArrayList<>();
         for (Slot s : all) {
