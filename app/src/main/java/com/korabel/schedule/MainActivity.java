@@ -7,7 +7,9 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.SpannableString;
 import android.text.TextWatcher;
+import android.text.style.RelativeSizeSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -356,7 +358,9 @@ public final class MainActivity extends Activity {
                 time.setTextSize(13);
                 time.setTextColor(getColor(R.color.time));
                 time.setTypeface(Typeface.DEFAULT_BOLD);
-                row.addView(time, new LinearLayout.LayoutParams(dp(84), -2));
+                time.setGravity(Gravity.CENTER);
+                time.setLineSpacing(0, 0.85f);
+                row.addView(time, new LinearLayout.LayoutParams(dp(52), -2));
 
                 LinearLayout mid = new LinearLayout(MainActivity.this);
                 mid.setId(2);
@@ -380,14 +384,24 @@ public final class MainActivity extends Activity {
                 room.setTextSize(12);
                 room.setTextColor(getColor(R.color.text_muted));
                 room.setGravity(Gravity.END);
-                row.addView(room, new LinearLayout.LayoutParams(dp(96), -2));
+                row.addView(room, new LinearLayout.LayoutParams(dp(64), -2));
             }
             TextView time = row.findViewById(1), subj = row.findViewById(3),
                      meta = row.findViewById(4), room = row.findViewById(5);
-            time.setText(s.time.replace(" - ", "\n– "));
+            // time as three compact centered lines: start / – / end
+            String[] t = s.time.split(" - ");
+            if (t.length == 2) {
+                SpannableString ts = new SpannableString(t[0] + "\n–\n" + t[1]);
+                ts.setSpan(new RelativeSizeSpan(0.7f), t[0].length() + 1, t[0].length() + 2, 0);
+                time.setText(ts, TextView.BufferType.SPANNABLE);
+            } else {
+                time.setText(s.time);
+            }
             subj.setText(s.subject);
             meta.setText(s.teacher.isEmpty() ? s.type : s.type + " · " + s.teacher);
-            room.setText(s.room);
+            // room as two lines: number/label over building
+            int sp = s.room.indexOf(' ');
+            room.setText(sp > 0 ? s.room.substring(0, sp) + "\n" + s.room.substring(sp + 1) : s.room);
             row.setOnClickListener(v -> showLesson(s));
             return row;
         }
