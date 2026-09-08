@@ -121,7 +121,7 @@ public final class MainActivity extends Activity {
     private View buildUi() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFFEEF1F4);
+        root.setBackgroundColor(getColor(R.color.bg));
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
@@ -144,12 +144,12 @@ public final class MainActivity extends Activity {
         tvGroup = new TextView(this);
         tvGroup.setTextSize(20);
         tvGroup.setTypeface(Typeface.DEFAULT_BOLD);
-        tvGroup.setTextColor(0xFF212121);
+        tvGroup.setTextColor(getColor(R.color.text_primary));
         title.addView(tvGroup);
 
         tvRange = new TextView(this);
         tvRange.setTextSize(13);
-        tvRange.setTextColor(0xFF616161);
+        tvRange.setTextColor(getColor(R.color.text_secondary));
         title.addView(tvRange);
         title.setOnClickListener(v -> showGroupPicker()); // tap title = change group
 
@@ -205,7 +205,7 @@ public final class MainActivity extends Activity {
 
         tvEmpty = new TextView(this);
         tvEmpty.setGravity(Gravity.CENTER);
-        tvEmpty.setTextColor(0xFF9E9E9E);
+        tvEmpty.setTextColor(getColor(R.color.text_hint));
         tvEmpty.setTextSize(15);
         tvEmpty.setPadding(dp(24), dp(24), dp(24), dp(24));
         body.addView(tvEmpty, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
@@ -253,7 +253,7 @@ public final class MainActivity extends Activity {
         tvRange.setText(rangeText());
         boolean upper = Smtu.isUpperWeek(this, dayMode ? plus(anchor, dayOffset) : anchor);
         tvWeek.setText(upper ? "ВЕРХНЯЯ НЕДЕЛЯ" : "НИЖНЯЯ НЕДЕЛЯ");
-        tvWeek.setBackgroundColor(upper ? 0xFF1A237E : 0xFF00695C);
+        tvWeek.setBackgroundColor(upper ? getColor(R.color.week_upper) : getColor(R.color.week_lower));
         tvWeek.setTextColor(Color.WHITE);
 
         list.setAdapter(new RowsAdapter(rows));
@@ -299,8 +299,8 @@ public final class MainActivity extends Activity {
             b.setTextSize(13);
             boolean sel = i == dayOffset;
             b.setTypeface(sel ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-            b.setTextColor(sel ? 0xFF1A237E : 0xFF757575);
-            b.setBackgroundColor(sel ? 0xFFDDE1F9 : Color.TRANSPARENT);
+            b.setTextColor(sel ? getColor(R.color.day_sel) : getColor(R.color.text_meta));
+            b.setBackgroundColor(sel ? getColor(R.color.chip_sel) : Color.TRANSPARENT);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(36), 1f);
             lp.setMargins(dp(2), dp(2), dp(2), dp(2));
             b.setOnClickListener(v -> { dayOffset = idx; render(); });
@@ -336,8 +336,8 @@ public final class MainActivity extends Activity {
             tv.setText(label + (h.today ? "  •  сегодня" : ""));
             tv.setTextSize(13);
             tv.setTypeface(Typeface.DEFAULT_BOLD);
-            tv.setTextColor(0xFF37474F);
-            tv.setBackgroundColor(h.today ? 0xFFE8EAF6 : 0x11000000);
+            tv.setTextColor(getColor(R.color.text_muted));
+            tv.setBackgroundColor(h.today ? getColor(R.color.today_bg) : getColor(R.color.header_bg));
             tv.setPadding(dp(12), dp(10), dp(12), dp(10));
             return tv;
         }
@@ -349,12 +349,12 @@ public final class MainActivity extends Activity {
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setGravity(Gravity.CENTER_VERTICAL);
                 row.setPadding(dp(12), dp(10), dp(12), dp(10));
-                row.setBackgroundColor(Color.WHITE);
+                row.setBackgroundColor(getColor(R.color.row));
 
                 TextView time = new TextView(MainActivity.this);
                 time.setId(1);
                 time.setTextSize(13);
-                time.setTextColor(0xFF1A237E);
+                time.setTextColor(getColor(R.color.time));
                 time.setTypeface(Typeface.DEFAULT_BOLD);
                 row.addView(time, new LinearLayout.LayoutParams(dp(84), -2));
 
@@ -366,19 +366,19 @@ public final class MainActivity extends Activity {
                 TextView subj = new TextView(MainActivity.this);
                 subj.setId(3);
                 subj.setTextSize(15);
-                subj.setTextColor(0xFF212121);
+                subj.setTextColor(getColor(R.color.text_primary));
                 mid.addView(subj);
 
                 TextView meta = new TextView(MainActivity.this);
                 meta.setId(4);
                 meta.setTextSize(12);
-                meta.setTextColor(0xFF757575);
+                meta.setTextColor(getColor(R.color.text_meta));
                 mid.addView(meta);
 
                 TextView room = new TextView(MainActivity.this);
                 room.setId(5);
                 room.setTextSize(12);
-                room.setTextColor(0xFF37474F);
+                room.setTextColor(getColor(R.color.text_muted));
                 room.setGravity(Gravity.END);
                 row.addView(room, new LinearLayout.LayoutParams(dp(96), -2));
             }

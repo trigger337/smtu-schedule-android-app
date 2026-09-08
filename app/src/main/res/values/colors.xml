@@ -1,4 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#0A3D62</color>
+
+    <color name="bg">#EEF1F4</color>
+    <color name="row">#FFFFFF</color>
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#616161</color>
+    <color name="text_meta">#757575</color>
+    <color name="text_hint">#9E9E9E</color>
+    <color name="text_muted">#37474F</color>
+    <color name="header_bg">#11000000</color>
+    <color name="time">#1A237E</color>
+    <color name="week_upper">#1A237E</color>
+    <color name="week_lower">#00695C</color>
+    <color name="day_sel">#1A237E</color>
+    <color name="chip_sel">#DDE1F9</color>
+    <color name="today_bg">#E8EAF6</color>
 </resources>
