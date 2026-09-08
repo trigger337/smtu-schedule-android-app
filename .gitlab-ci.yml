@@ -65,7 +65,7 @@ build:release:
       - app/build/outputs/apk/release/app-release.apk
       - app/build/outputs/apk/debug/app-debug.apk
 
-publish:
+publish:packages:
   stage: publish
   image: curlimages/curl:8.10.1
   rules:
@@ -84,6 +84,13 @@ publish:
       --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
       --upload-file app/build/outputs/apk/debug/app-debug.apk
       "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_debug/${CI_COMMIT_TAG}/app_debug.apk"
+
+publish:release:
+  stage: publish
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG
+  needs: [publish:packages]
   release:
     tag_name: "$CI_COMMIT_TAG"
     name: "Расписание СПбГМТУ $CI_COMMIT_TAG"
