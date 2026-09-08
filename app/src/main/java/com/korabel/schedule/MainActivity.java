@@ -3,12 +3,16 @@ package com.korabel.schedule;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.SpannableString;
 import android.text.TextWatcher;
+import android.text.method.LinkMovementMethod;
+import android.text.style.ClickableSpan;
 import android.text.style.RelativeSizeSpan;
 import android.view.Gravity;
 import android.view.View;
@@ -575,27 +579,44 @@ public final class MainActivity extends Activity {
         String upd = newer ? "доступна версия " + latest
                 : latest == null ? "ещё не проверялось"
                 : "установлена последняя версия";
+        String link = "gitlab.com/trigger337/smtu-schedule-android-app";
+        String text = "Расписание СПбГМТУ " + BuildConfig.VERSION_NAME
+                + " (сборка " + BuildConfig.BUILD_DATE + ")\n\n"
+                + "Неофициальное приложение-просмотрщик расписания. Все данные "
+                + "загружаются напрямую с www.smtu.ru — официального сайта "
+                + "университета — при запуске и по кнопке ⟳, после чего "
+                + "работают офлайн из кэша на устройстве.\n\n"
+                + "Верхняя/нижняя неделя определяется автоматически по данным "
+                + "сайта.\n\n"
+                + "Тап по названию группы вверху — смена группы.\n\n"
+                + "Исходный код: " + link + "\n\n"
+                + "Обновления: " + upd + ".";
+        SpannableString msg = new SpannableString(text);
+        int ls = text.indexOf(link);
+        msg.setSpan(new ClickableSpan() {
+            @Override public void onClick(View widget) {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.REPO_URL)));
+                } catch (Exception e) {
+                    toast("Браузер не найден");
+                }
+            }
+        }, ls, ls + link.length(), 0);
+
         AlertDialog.Builder b = new AlertDialog.Builder(this)
                 .setTitle("О приложении")
-                .setMessage("Расписание СПбГМТУ " + BuildConfig.VERSION_NAME + "\n\n"
-                        + "Неофициальное приложение-просмотрщик расписания. Все данные "
-                        + "загружаются напрямую с www.smtu.ru — официального сайта "
-                        + "университета — при запуске и по кнопке ⟳, после чего "
-                        + "работают офлайн из кэша на устройстве.\n\n"
-                        + "Верхняя/нижняя неделя определяется автоматически по данным "
-                        + "сайта.\n\n"
-                        + "Тап по названию группы вверху — смена группы.\n\n"
-                        + "Обновления: " + upd + ".");
+                .setMessage(msg);
         if (newer) {
-            b.setPositiveButton("Скачать", (d, w) -> startActivity(new android.content.Intent(
-                    android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse(UpdateChecker.RELEASES_URL))));
+            b.setPositiveButton("Скачать", (d, w) -> startActivity(new Intent(
+                    Intent.ACTION_VIEW, Uri.parse(UpdateChecker.RELEASES_URL))));
             b.setNegativeButton("Закрыть", null);
         } else {
             b.setPositiveButton("Закрыть", null);
         }
         b.setNeutralButton("Проверить", (d, w) -> UpdateChecker.checkNow(this));
-        b.show();
+        AlertDialog dlg = b.show();
+        TextView body = dlg.findViewById(android.R.id.message);
+        if (body != null) body.setMovementMethod(LinkMovementMethod.getInstance());
     }
 
     // ----------------------------------------------------------------- utils

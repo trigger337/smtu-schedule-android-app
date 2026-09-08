@@ -19,8 +19,9 @@ import java.util.regex.Pattern;
  */
 public final class UpdateChecker {
 
-    public static final String RELEASES_URL =
-            "https://gitlab.com/trigger337/smtu-schedule-android-app/-/releases";
+    public static final String REPO_URL =
+            "https://gitlab.com/trigger337/smtu-schedule-android-app";
+    public static final String RELEASES_URL = REPO_URL + "/-/releases";
 
     private static final String P_VERSION = "updVersion";
     private static final String P_TOASTS = "updToasts";

@@ -36,6 +36,7 @@ android {
 
     defaultConfig {
         buildConfigField "String", "UPDATE_API", "\"${updateApi}\""
+        buildConfigField "String", "BUILD_DATE", "\"${new Date().format('yyyy-MM-dd')}\""
     }
 
     signingConfigs {
