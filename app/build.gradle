@@ -14,6 +14,9 @@ def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
 }
+// GitLab releases API used by the in-app update check; override with -PupdateApi=
+def updateApi = (project.findProperty("updateApi")
+        ?: "https://gitlab.com/api/v4/projects/trigger337%2Fsmtu-schedule-android-app/releases").toString()
 
 android {
     namespace 'com.korabel.schedule'
@@ -29,6 +32,10 @@ android {
 
     buildFeatures {
         buildConfig true
+    }
+
+    defaultConfig {
+        buildConfigField "String", "UPDATE_API", "\"${updateApi}\""
     }
 
     signingConfigs {

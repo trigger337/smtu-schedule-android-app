@@ -78,6 +78,7 @@ public final class MainActivity extends Activity {
             dayOffset = savedInstanceState.getInt("off");
         }
         if (groupId == null) showGroupPicker(); else load();
+        UpdateChecker.onLaunch(this);
     }
 
     @Override protected void onSaveInstanceState(Bundle out) {
@@ -568,7 +569,13 @@ public final class MainActivity extends Activity {
     // ------------------------------------------------------------------ about
 
     private void showInfo() {
-        new AlertDialog.Builder(this)
+        String latest = UpdateChecker.latestKnown(this);
+        final boolean newer = latest != null
+                && UpdateChecker.isNewer(latest, BuildConfig.VERSION_NAME);
+        String upd = newer ? "доступна версия " + latest
+                : latest == null ? "ещё не проверялось"
+                : "установлена последняя версия";
+        AlertDialog.Builder b = new AlertDialog.Builder(this)
                 .setTitle("О приложении")
                 .setMessage("Расписание СПбГМТУ " + BuildConfig.VERSION_NAME + "\n\n"
                         + "Неофициальное приложение-просмотрщик расписания. Все данные "
@@ -577,9 +584,18 @@ public final class MainActivity extends Activity {
                         + "работают офлайн из кэша на устройстве.\n\n"
                         + "Верхняя/нижняя неделя определяется автоматически по данным "
                         + "сайта.\n\n"
-                        + "Тап по названию группы вверху — смена группы.")
-                .setPositiveButton("Закрыть", null)
-                .show();
+                        + "Тап по названию группы вверху — смена группы.\n\n"
+                        + "Обновления: " + upd + ".");
+        if (newer) {
+            b.setPositiveButton("Скачать", (d, w) -> startActivity(new android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(UpdateChecker.RELEASES_URL))));
+            b.setNegativeButton("Закрыть", null);
+        } else {
+            b.setPositiveButton("Закрыть", null);
+        }
+        b.setNeutralButton("Проверить", (d, w) -> UpdateChecker.checkNow(this));
+        b.show();
     }
 
     // ----------------------------------------------------------------- utils
