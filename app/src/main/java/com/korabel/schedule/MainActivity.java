@@ -432,14 +432,32 @@ public final class MainActivity extends Activity {
         }
         if (!s.teacher.isEmpty()) m.append('\n').append('\n').append("Преподаватель: ").append(s.teacher);
 
+        final Maps.Building bld = Maps.ofRoom(s.room);
+        CharSequence message = m;
+        if (bld != null) {
+            String line = "\n\n🗺 " + Maps.label(bld, s.room)
+                    + (bld.url != null ? " — на карте" : " — как добраться");
+            android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(m);
+            int at = sb.length();
+            sb.append(line);
+            sb.setSpan(new ClickableSpan() {
+                @Override public void onClick(View widget) {
+                    Maps.show(MainActivity.this, bld, s.room);
+                }
+            }, at, sb.length(), 0);
+            message = sb;
+        }
+
         AlertDialog.Builder b = new AlertDialog.Builder(this);
         b.setTitle(s.subject);
-        b.setMessage(m);
+        b.setMessage(message);
         b.setNeutralButton("О предмете", (d, w) -> showSubject(s.subject));
         if (!s.teacher.isEmpty())
             b.setPositiveButton("Преподаватель", (d, w) -> showTeacher(s));
         b.setNegativeButton("Закрыть", null);
-        b.show();
+        AlertDialog dlg = b.show();
+        TextView body = dlg.findViewById(android.R.id.message);
+        if (body != null && bld != null) body.setMovementMethod(LinkMovementMethod.getInstance());
     }
 
     /** All occurrences of a subject in the loaded schedule. */
