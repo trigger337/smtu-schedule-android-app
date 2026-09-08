@@ -18,3 +18,6 @@ keystore.properties
 
 # OS
 .DS_Store
+
+# ZCode local state
+.zcode/
