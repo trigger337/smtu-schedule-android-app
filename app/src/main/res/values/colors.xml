@@ -16,4 +16,11 @@
     <color name="day_sel">#1A237E</color>
     <color name="chip_sel">#DDE1F9</color>
     <color name="today_bg">#E8EAF6</color>
+
+    <color name="w_bg">#FFFFFF</color>
+    <color name="w_text">#212121</color>
+    <color name="w_sub">#757575</color>
+    <color name="w_ring_lesson">#3F51B5</color>
+    <color name="w_ring_break">#F9A825</color>
+    <color name="w_ring_track">#22000000</color>
 </resources>

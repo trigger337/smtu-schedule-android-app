@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ring whose progress sweep fills up as the break runs out. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="ring"
+            android:innerRadiusRatio="2.6"
+            android:thicknessRatio="16"
+            android:useLevel="false">
+            <solid android:color="@color/w_ring_track" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <shape android:shape="ring"
+            android:innerRadiusRatio="2.6"
+            android:thicknessRatio="16"
+            android:useLevel="true">
+            <solid android:color="@color/w_ring_break" />
+        </shape>
+    </item>
+</layer-list>

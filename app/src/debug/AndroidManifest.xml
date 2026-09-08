@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Debug builds only: allow plain http so the update check can be pointed
-     at a local fake server (-PupdateApi=http://127.0.0.1:PORT/...). -->
+     at a local fake server (-PupdateApi=http://127.0.0.1:PORT/...), and add
+     the widget-host test harness activity. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true">
+        <activity
+            android:name=".WidgetHostActivity"
+            android:exported="true" />
+    </application>
 </manifest>

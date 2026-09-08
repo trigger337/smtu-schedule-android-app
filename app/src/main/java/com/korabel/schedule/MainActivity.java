@@ -99,6 +99,7 @@ public final class MainActivity extends Activity {
         tvGroup.setText(groupName);
         render();          // instant from cache...
         refresh();         // ...then silently update from the network
+        WidgetUpdater.poke(this);
     }
 
     private void refresh() {
@@ -107,6 +108,7 @@ public final class MainActivity extends Activity {
             slots = result;
             render();
             if (error != null) toast(error);
+            WidgetUpdater.poke(this);
         });
     }
 
