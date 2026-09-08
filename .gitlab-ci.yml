@@ -32,7 +32,7 @@ variables:
       - .gradle/caches/
       - .gradle/wrapper/
 
-build:debug:
+build_debug:
   stage: build
   image: eclipse-temurin:17-jdk-jammy
   rules:
@@ -49,7 +49,7 @@ build:debug:
     paths:
       - app/build/outputs/apk/debug/app-debug.apk
 
-build:release:
+build_release:
   stage: build
   image: eclipse-temurin:17-jdk-jammy
   rules:
@@ -65,12 +65,12 @@ build:release:
       - app/build/outputs/apk/release/app-release.apk
       - app/build/outputs/apk/debug/app-debug.apk
 
-publish:packages:
+publish_packages:
   stage: publish
   image: curlimages/curl:8.10.1
   rules:
     - if: $CI_COMMIT_TAG
-  needs: [build:release]
+  needs: [build_release]
   script:
     # Release APK -> package app_release v<tag>
     - >
@@ -85,12 +85,12 @@ publish:packages:
       --upload-file app/build/outputs/apk/debug/app-debug.apk
       "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_debug/${CI_COMMIT_TAG}/app_debug.apk"
 
-publish:release:
+publish_release:
   stage: publish
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   rules:
     - if: $CI_COMMIT_TAG
-  needs: [publish:packages]
+  needs: [publish_packages]
   release:
     tag_name: "$CI_COMMIT_TAG"
     name: "Расписание СПбГМТУ $CI_COMMIT_TAG"
