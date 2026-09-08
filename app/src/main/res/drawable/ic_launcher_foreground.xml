@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- White anchor, stroked. 108x108 adaptive canvas; anchor sits inside the
+     66dp safe zone (roughly 22..86). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M47.5,32 A6.5,6.5 0 1,0 60.5,32 A6.5,6.5 0 1,0 47.5,32 M54,38.5 L54,80 M41,47 L67,47 M29,60 C29,72 40,80 54,80 C68,80 79,72 79,60 M22,65 L29,60 L32,53 M86,65 L79,60 L76,53"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
