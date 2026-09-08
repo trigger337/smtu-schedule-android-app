@@ -1,0 +1,98 @@
+# CI: debug APK on main pushes; on vX.Y.Z tags build release+debug,
+# publish both APKs as generic packages (app_release/app_debug) and create
+# the GitLab release. Uses only CI_JOB_TOKEN — no PAT or CI variables.
+
+stages: [build, publish]
+
+variables:
+  ANDROID_HOME: "$CI_PROJECT_DIR/.android-sdk"
+  ANDROID_SDK_ROOT: "$CI_PROJECT_DIR/.android-sdk"
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+  CLT: "11076708"   # cmdline-tools build id
+
+# Plain JDK image + scripted cmdline-tools install: no dependency on
+# third-party Android images and their (drifting) SDK levels.
+.setup_sdk: &setup_sdk
+  - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl unzip > /dev/null
+  - if [ ! -d "$ANDROID_HOME/cmdline-tools/latest" ]; then
+      mkdir -p "$ANDROID_HOME/cmdline-tools" &&
+      curl -sSLo /tmp/clt.zip "https://dl.google.com/android/repository/commandlinetools-linux-${CLT}_latest.zip" &&
+      unzip -q /tmp/clt.zip -d "$ANDROID_HOME/cmdline-tools" &&
+      mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest";
+    fi
+  - yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+  - "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+
+.gradle_cache: &gradle_cache
+  cache:
+    key: android-sdk-34-gradle
+    paths:
+      - .android-sdk/
+      - .gradle/caches/
+      - .gradle/wrapper/
+
+build:debug:
+  stage: build
+  image: eclipse-temurin:17-jdk-jammy
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  <<: *gradle_cache
+  before_script: *setup_sdk
+  script:
+    - ./gradlew --quiet assembleDebug
+  artifacts:
+    name: "app-debug-$CI_COMMIT_SHORT_SHA"
+    expire_in: 1 week
+    paths:
+      - app/build/outputs/apk/debug/app-debug.apk
+
+build:release:
+  stage: build
+  image: eclipse-temurin:17-jdk-jammy
+  rules:
+    - if: $CI_COMMIT_TAG
+  <<: *gradle_cache
+  before_script: *setup_sdk
+  script:
+    - ./gradlew --quiet assembleRelease assembleDebug
+  artifacts:
+    name: "app-$CI_COMMIT_TAG"
+    expire_in: never
+    paths:
+      - app/build/outputs/apk/release/app-release.apk
+      - app/build/outputs/apk/debug/app-debug.apk
+
+publish:
+  stage: publish
+  image: curlimages/curl:8.10.1
+  rules:
+    - if: $CI_COMMIT_TAG
+  needs: [build:release]
+  script:
+    # Release APK -> package app_release v<tag>
+    - >
+      curl --fail --silent --show-error
+      --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
+      --upload-file app/build/outputs/apk/release/app-release.apk
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_release/${CI_COMMIT_TAG}/app_release.apk"
+    # Debug APK -> package app_debug v<tag>
+    - >
+      curl --fail --silent --show-error
+      --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
+      --upload-file app/build/outputs/apk/debug/app-debug.apk
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_debug/${CI_COMMIT_TAG}/app_debug.apk"
+  release:
+    tag_name: "$CI_COMMIT_TAG"
+    name: "Расписание СПбГМТУ $CI_COMMIT_TAG"
+    description: "Обновление приложения: виджеты, карты корпусов, тёмная тема, проверка обновлений. APK — во вложениях (app_release.apk / app_debug.apk)."
+    assets:
+      links:
+        - name: app_release.apk
+          url: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_release/${CI_COMMIT_TAG}/app_release.apk"
+          link_type: package
+        - name: app_debug.apk
+          url: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_debug/${CI_COMMIT_TAG}/app_debug.apk"
+          link_type: package
