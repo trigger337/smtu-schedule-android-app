@@ -429,7 +429,7 @@ public final class MainActivity extends Activity {
             sb.append(line);
             sb.setSpan(new ClickableSpan() {
                 @Override public void onClick(View widget) {
-                    Maps.show(MainActivity.this, bld, s.room);
+                    Maps.show(MainActivity.this, bld);
                 }
             }, at, sb.length(), 0);
             message = sb;
