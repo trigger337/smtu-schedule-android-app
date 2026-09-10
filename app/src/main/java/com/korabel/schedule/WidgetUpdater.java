@@ -38,9 +38,9 @@ public final class WidgetUpdater {
         int[] ids = awm.getAppWidgetIds(new ComponentName(app, TimerWidgetProvider.class));
         for (int id : ids) awm.updateAppWidget(id, TimerWidgetProvider.render(app));
         int[] nameIds = awm.getAppWidgetIds(new ComponentName(app, NameWidgetProvider.class));
-        for (int id : nameIds) awm.updateAppWidget(id, NameWidgetProvider.render(app));
+        for (int id : nameIds) awm.updateAppWidget(id, NameWidgetProvider.render(app, awm, id));
         int[] agendaIds = awm.getAppWidgetIds(new ComponentName(app, AgendaWidgetProvider.class));
-        for (int id : agendaIds) awm.updateAppWidget(id, AgendaWidgetProvider.render(app));
+        for (int id : agendaIds) awm.updateAppWidget(id, AgendaWidgetProvider.render(app, awm, id));
         if (ids.length + nameIds.length + agendaIds.length > 0) maybeRefresh(app);
     }
 

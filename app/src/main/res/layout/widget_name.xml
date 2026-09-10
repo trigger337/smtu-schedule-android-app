@@ -1,69 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Name widget, vertical variant: tall card — the subject, teacher and
+     meta run top-to-bottom in columns of upright letters (first column
+     rightmost), with the hour timeline bar pinned to the bottom. The text
+     arrives as one bitmap because RemoteViews cannot lay text out per
+     glyph. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wn_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
+    android:orientation="vertical"
     android:background="@drawable/widget_bg"
     android:padding="6dp">
 
     <ImageView
-        android:id="@+id/wn_stripe_b"
-        android:layout_width="4dp"
-        android:layout_height="match_parent"
-        android:background="@color/w_ring_lesson" />
+        android:id="@+id/wn_text"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scaleType="fitXY" />
 
     <ImageView
-        android:id="@+id/wn_stripe_y"
-        android:layout_width="4dp"
-        android:layout_height="match_parent"
-        android:background="@color/w_ring_break"
-        android:visibility="gone" />
-
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center_vertical"
-        android:paddingStart="7dp">
-
-        <TextView
-            android:id="@+id/wn_label"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="9sp"
-            android:textStyle="bold"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:textColor="@color/w_sub" />
-
-        <TextView
-            android:id="@+id/wn_subject"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:maxLines="3"
-            android:ellipsize="end"
-            android:textColor="@color/w_text" />
-
-        <TextView
-            android:id="@+id/wn_time"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="10sp"
-            android:maxLines="1"
-            android:textColor="@color/w_sub" />
-
-        <TextView
-            android:id="@+id/wn_extra"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:textColor="@color/w_ring_break" />
-    </LinearLayout>
+        android:id="@+id/wn_bar"
+        android:layout_width="match_parent"
+        android:layout_height="10dp"
+        android:layout_marginTop="5dp"
+        android:scaleType="fitXY"
+        android:importantForAccessibility="no" />
 </LinearLayout>

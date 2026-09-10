@@ -76,22 +76,38 @@ only, no downloads.
   загружается с smtu.ru по его viewperson-id
 - Для занятий без списка дат — запасное сопоставление по чётности и дню недели
 
-### Виджеты (3 штуки)
+### Виджеты
 
 Все виджеты сами следят за временем через AlarmManager (обновление каждую
 минуту только во время пары или короткой перемены, иначе — на границе
-состояния или в полночь), переживают перезагрузку и смену часового пояса,
-обновляют устаревший кэш (старше 12 ч) в фоне и открывают приложение по тапу:
+состояния или в полночь), переживают перезагрузку и смену часового пояса
+и обновляют устаревший кэш (старше 12 ч) в фоне. **Одиночный тап обновляет
+виджет, двойной — открывает приложение** (RemoteViews не видит жестов,
+поэтому двойной тап распознаётся по двум нажатиям за 350 м). Опубликованные
+виджеты изменяют размер (resizeMode) и подстраивают ориентацию под форму:
+шире, чем выше — горизонтальная компоновка, иначе — вертикальная. На экран
+блокировки виджеты в Android поставить нельзя (удалены ещё в Android 5).
+
+Общий элемент — **полоса ближайшего часа**: 60 минут от текущего момента,
+клетки по 10 минут чередуются двумя оттенками (пара — синий/голубой,
+перемена — оранжевый/жёлтый), слева стрелка «сейчас». Пара «рождается»
+на правом краю за час до начала и доехав до стрелки — начинается.
+Рисуется на Canvas в bitmap (RemoteViews не умеет динамические сегменты),
+поэтому смена темы подхватывается битмапами со следующим тиком.
 
 - **Таймер пар (1×1)** — радиальное кольцо: синее убывает до конца пары,
-  жёлтое наполняется до начала следующей; после учебного дня — время
-  следующей пары («завтра» / день недели)
-- **Текущая пара (1×2)** — цветная полоса, метка «СЕЙЧАС» / «СЛЕДУЮЩАЯ
-  ПАРА», предмет, время и обратный отсчёт («до конца 65 мин», «через
-  5 мин») или аудитория
-- **Расписание на день (2×3)** — блок «Сейчас» с тонкой полосой-таймером
-  и список «Далее» (до 3 строк); в конце дня переключается на следующий
-  учебный день с датой в заголовке
+  жёлтое наполняется до начала следующей (окно 90 минут, дальше — пусто);
+  после учебного дня — время следующей пары («завтра» / день недели)
+- **Текущая пара (3×1)** — метка «СЕЙЧАС» / «СЛЕДУЮЩАЯ ПАРА», предмет,
+  преподаватель, время и обратный отсчёт («до конца 65 мин», «через 5 мин»)
+  или аудитория + полоса ближайшего часа; при сужении до **1×3** — карточка с
+  **вертикальным текстом**: буквы стоят прямо и читаются сверху вниз,
+  колонки идут справа налево (первая — предмет), полоса снизу
+- **Расписание на день (4×2)** — на доработке и временно скрыт из выборки
+  виджетов. Запланированный вид: половина карточки — текстовая панель
+  («Далее», при нехватке места ближние пары в приоритете), вторая —
+  **плитка-полоса**: полоса ближайшего часа на всю площадь, внутри только
+  отсчёт; в вертикальной форме (2×4) половины меняются местами
 
 ### Карты корпусов
 
@@ -115,7 +131,9 @@ only, no downloads.
         Smtu.java               клиент smtu.ru: загрузка, парсер карточек, кэш, чётность
         MainActivity.java       интерфейс приложения (кнопки/списки кодом)
         Now.java                машина состояний «сейчас/перемена/далее» + общий путь данных виджетов
+        WidgetArt.java          canvas-рисование: полоса часа, кольцо, панель расписания
         WidgetUpdater.java      рендер всех виджетов + самопланируемые будильники
+        WidgetClickReceiver.java тап = обновление, двойной тап = открыть приложение
         TimerWidgetProvider.java / NameWidgetProvider.java / AgendaWidgetProvider.java
         SystemReceiver.java     BOOT/TIME_SET/TIMEZONE/… — перезапуск будильников
         UpdateChecker.java      проверка релизов GitLab
@@ -216,22 +234,39 @@ offline support, instant startup, and past lessons survive page edits.
   live from smtu.ru via their viewperson id
 - Lessons whose rows carry no exact dates fall back to parity + weekday matching
 
-### Widgets (3)
+### Widgets
 
 All widgets track time themselves via AlarmManager (per-minute updates only
 during a lesson or a short break, otherwise at the next state boundary or
-midnight), survive reboot and timezone changes, refresh a stale (>12 h)
-cache in the background, and open the app on tap:
+midnight), survive reboot and timezone changes, and refresh a stale (>12 h)
+cache in the background. **A single tap refreshes the widget, a double tap
+opens the app** (RemoteViews cannot see gestures, so the double tap is two
+clicks within 350 ms). The published widgets are resizable and adapt their
+orientation to their shape: wider than tall — horizontal layout, otherwise
+vertical. Lock-screen widgets are not a thing in modern Android (removed
+in 5.0).
+
+The shared piece is the **next-hour timeline bar**: 60 minutes from now,
+10-minute cells alternating two shades (lessons blue/light blue, breaks
+orange/yellow), with a "now" arrow at the left edge. A lesson spawns at
+the right edge an hour before it starts; reaching the arrow means it
+begins. It is drawn on a Canvas into a bitmap (RemoteViews cannot draw
+dynamic segments), so a theme flip is picked up by bitmaps on the next
+tick.
 
 - **Таймер пар (1×1)** — radial ring: blue drains to the end of the lesson,
-  yellow fills toward the next one; after the study day — the next lesson
-  time («завтра» / weekday)
-- **Текущая пара (1×2)** — colored stripe, «СЕЙЧАС» / «СЛЕДУЮЩАЯ ПАРА»
-  label, subject, time range and a countdown («до конца 65 мин», «через
-  5 мин») or the room
-- **Расписание на день (2×3)** — a «Сейчас» block with a thin countdown bar
-  plus a «Далее» list (up to 3 rows); falls over to the next study day with
-  the date in the header
+  yellow fills toward the next one (a 90-minute window, empty beyond it);
+  after the study day — the next lesson time («завтра» / weekday)
+- **Текущая пара (3×1)** — «СЕЙЧАС» / «СЛЕДУЮЩАЯ ПАРА» label, subject,
+  teacher, time range and a countdown («до конца 65 мин», «через 5 мин») or
+  the room, plus the next-hour bar; when narrowed down to **1×3** the card
+  switches to **vertical text**: upright letters reading top-to-bottom,
+  columns running right-to-left (the subject first), bar at the bottom
+- **Расписание на день (4×2)** — being reworked and temporarily hidden from
+  the widget picker. The planned look: half the card is a text panel
+  («Далее» rows; when space runs out the nearest lessons win), the other
+  half is the **bar tile** — the next-hour bar filling the whole area with
+  just the countdown inside; in a vertical shape (2×4) the halves stack
 
 ### Building maps
 
@@ -258,7 +293,9 @@ in the ⓘ dialog. No auto-installs.
         Smtu.java               smtu.ru client: fetch, card-view parser, cache, parity
         MainActivity.java       the app UI (programmatic views)
         Now.java                the "now/break/next" state machine + shared widget data path
+        WidgetArt.java          canvas drawing: hour bar, ring, agenda panel
         WidgetUpdater.java      renders all widgets + self-rescheduling alarms
+        WidgetClickReceiver.java tap = refresh, double tap = open the app
         TimerWidgetProvider.java / NameWidgetProvider.java / AgendaWidgetProvider.java
         SystemReceiver.java     BOOT/TIME_SET/TIMEZONE/… — restart the alarms
         UpdateChecker.java      GitLab release check

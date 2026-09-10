@@ -21,4 +21,6 @@
     <color name="w_ring_lesson">#7986CB</color>
     <color name="w_ring_break">#FFD54F</color>
     <color name="w_ring_track">#22FFFFFF</color>
+    <color name="w_lesson2">#9FA8DA</color>
+    <color name="w_break2">#FFE082</color>
 </resources>

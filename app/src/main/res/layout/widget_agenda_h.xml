@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Agenda widget, 4x2 default: bitmap text panel (2x2, adaptive rows) and
+     the timeline tile (2x2) with the countdown ring inside. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wa_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_bg">
+
+    <ImageView
+        android:id="@+id/wa_panel"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:scaleType="fitXY" />
+
+    <ImageView
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:background="@color/w_ring_track"
+        android:importantForAccessibility="no" />
+
+    <ImageView
+        android:id="@+id/wa_tile"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:scaleType="fitXY"
+        android:importantForAccessibility="no" />
+</LinearLayout>
