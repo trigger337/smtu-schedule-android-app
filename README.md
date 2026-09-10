@@ -1,5 +1,26 @@
 # Расписание СПбГМТУ — minimal native Android app
 
+## Скачать · Download
+
+APK публикуется только в [релизах GitLab](https://gitlab.com/trigger337/smtu-schedule-android-app/-/releases) —
+на домашней странице проекта. Зеркало на GitHub содержит только исходный
+код, без загрузок.
+
+**[Скачать последнюю версию →](https://gitlab.com/trigger337/smtu-schedule-android-app/-/releases/permalink/latest)** ·
+[все релизы](https://gitlab.com/trigger337/smtu-schedule-android-app/-/releases)
+
+---
+
+APKs are published on the
+[GitLab releases](https://gitlab.com/trigger337/smtu-schedule-android-app/-/releases)
+page only — the project home. The GitHub mirror carries the source code
+only, no downloads.
+
+**[Download the latest release →](https://gitlab.com/trigger337/smtu-schedule-android-app/-/releases/permalink/latest)** ·
+[all releases](https://gitlab.com/trigger337/smtu-schedule-android-app/-/releases)
+
+---
+
 ## Русский
 
 Неофициальное приложение для просмотра расписания
