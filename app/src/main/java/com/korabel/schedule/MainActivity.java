@@ -821,6 +821,7 @@ public final class MainActivity extends Activity {
             Group picked = filtered.get(pos);
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                 .putString(PREF_GID, picked.id).putString(PREF_GNAME, picked.name).apply();
+            Smtu.touchRecent(this, picked.id);
             groupId = picked.id;
             groupName = picked.name;
             anchor = Dates.monday(Dates.today());

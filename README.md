@@ -182,6 +182,12 @@ CI (`.gitlab-ci.yml`) собирает debug на каждый push в main, а 
   работать из кэша. Сеть используется только при запуске и по кнопке ⟳
   (виджеты — раз в 12 ч при устаревшем кэше). Планы корпусов открываются
   в браузере и приложением не скачиваются.
+- Хранение разделено по «ценно́сти»: списки групп и все расписания (включая
+  преподавательские) лежат в кэше (`cache/`) — система может стереть их
+  в любой момент, и всё это спокойно перекачивается заново. Две последние
+  использованные группы расписаний дополнительно зеркалируются в data
+  (`files/`), поэтому после очистки кэша приложение и виджеты продолжают
+  показывать расписание офлайн, а кэш восстанавливается из зеркала.
 - Min SDK 23 (Android 6.0), target SDK 34.
 
 ### Лицензия
@@ -351,6 +357,12 @@ packages and creates the GitLab release.
   working from cache. Fetches happen only at startup and on ⟳ (widgets:
   once per 12 h when the cache is stale). Building plans open in the
   browser and are never downloaded by the app.
+- Storage is split by replaceability: the group list and all schedules
+  (teacher ones included) live in the cache dir (`cache/`) — the system may
+  wipe it at any time and everything there is freely re-downloadable. The
+  two most recently used group schedules are additionally mirrored into
+  data (`files/`), so after a cache wipe the app and widgets keep showing
+  the schedule offline, and the cache restores itself from the mirror.
 - Min SDK 23 (Android 6.0), target SDK 34.
 
 ### License

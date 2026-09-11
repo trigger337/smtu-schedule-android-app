@@ -49,7 +49,7 @@ public final class WidgetUpdater {
         final SharedPreferences p = app.getSharedPreferences("sched", Context.MODE_PRIVATE);
         final String gid = p.getString(P_GID, null);
         if (gid == null) return;
-        File cache = new File(app.getFilesDir(), "g_" + gid + ".json");
+        File cache = Smtu.schedFile(app, false, gid);
         long now = System.currentTimeMillis();
         if (cache.exists() && now - cache.lastModified() < STALE_MS) return;
         if (now - p.getLong("widgetFetch", 0) < FETCH_THROTTLE_MS) return;

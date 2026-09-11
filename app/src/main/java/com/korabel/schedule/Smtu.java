@@ -57,6 +57,7 @@ public final class Smtu {
 
     public static final String HOST = "https://www.smtu.ru";
     private static final String UA = "Mozilla/5.0 (Linux; Android 14) Chrome/126.0 Mobile";
+    private static final String PREF_RECENT = "recent";
     private static final Handler UI = new Handler(Looper.getMainLooper());
 
     /** One class occurrence: a subject at a time slot on a weekday. */
@@ -113,6 +114,7 @@ public final class Smtu {
 
     /** All groups from /ru/listschedule/, cache-first. */
     public static void groups(Context ctx, final Callback<List<Group>> cb) {
+        migrate(ctx);
         final List<Group> cached = readGroupsCache(ctx);
         if (!cached.isEmpty()) cb.done(cached, null);
         new Thread(() -> {
@@ -128,6 +130,7 @@ public final class Smtu {
 
     /** Full-semester schedule (group or teacher); merges fetch into cache. */
     public static void schedule(Context ctx, boolean teacher, String id, Callback<List<Slot>> cb) {
+        migrate(ctx);
         new Thread(() -> {
             try {
                 String path = teacher ? "/ru/viewschedule_new/teacher/" : "/ru/viewschedule_new/";
@@ -143,6 +146,7 @@ public final class Smtu {
 
     /** Synchronous cache read for instant restore. */
     public static List<Slot> loadCacheSync(Context ctx, boolean teacher, String id) {
+        migrate(ctx);
         return readSlotCache(ctx, teacher, id);
     }
 
@@ -256,6 +260,13 @@ public final class Smtu {
 
     // ------------------------------------------------------------------ cache
 
+    /**
+     * Losable data lives in the cache dir: schedules and the group list can
+     * all be refetched. The two most recently used group schedules are also
+     * mirrored into the files dir, so the app and the widgets survive a cache
+     * wipe offline. Teacher schedules are cache-only.
+     */
+
     private static List<Slot> mergeAndStore(Context ctx, boolean teacher, String id, List<Slot> fresh) {
         Map<String, Slot> byKey = new TreeMap<>();
         for (Slot s : readSlotCache(ctx, teacher, id)) byKey.put(s.key(), s);
@@ -265,14 +276,25 @@ public final class Smtu {
         try {
             JSONArray arr = new JSONArray();
             for (Slot s : all) arr.put(s.toJson());
-            write(schedFile(ctx, teacher, id), new JSONObject().put("slots", arr).toString());
+            File c = schedFile(ctx, teacher, id);
+            write(c, new JSONObject().put("slots", arr).toString());
+            if (!teacher && recents(ctx).contains(id))
+                mirror(c, dataFile(ctx, id));
         } catch (Exception ignored) { }
         return all;
     }
 
     private static List<Slot> readSlotCache(Context ctx, boolean teacher, String id) {
+        List<Slot> out = readSlotsFrom(schedFile(ctx, teacher, id));
+        if (!out.isEmpty() || teacher) return out;
+        File d = dataFile(ctx, id);                    // cache wiped: fall back to the
+        out = readSlotsFrom(d);                        // durable mirror and restore the
+        if (!out.isEmpty()) mirror(d, schedFile(ctx, false, id)); // cache from it
+        return out;
+    }
+
+    private static List<Slot> readSlotsFrom(File f) {
         try {
-            File f = schedFile(ctx, teacher, id);
             if (!f.exists()) return new ArrayList<>();
             JSONArray arr = new JSONObject(read(f)).getJSONArray("slots");
             List<Slot> out = new ArrayList<>(arr.length());
@@ -283,7 +305,7 @@ public final class Smtu {
 
     private static List<Group> readGroupsCache(Context ctx) {
         try {
-            File f = new File(ctx.getFilesDir(), "groups.json");
+            File f = new File(ctx.getCacheDir(), "groups.json");
             if (!f.exists()) return new ArrayList<>();
             JSONArray arr = new JSONObject(read(f)).getJSONArray("groups");
             List<Group> out = new ArrayList<>(arr.length());
@@ -299,12 +321,80 @@ public final class Smtu {
         try {
             JSONArray arr = new JSONArray();
             for (Group g : groups) arr.put(new JSONObject().put("id", g.id).put("name", g.name));
-            write(new File(ctx.getFilesDir(), "groups.json"), new JSONObject().put("groups", arr).toString());
+            write(new File(ctx.getCacheDir(), "groups.json"), new JSONObject().put("groups", arr).toString());
         } catch (Exception ignored) { }
     }
 
-    private static File schedFile(Context ctx, boolean teacher, String id) {
-        return new File(ctx.getFilesDir(), (teacher ? "t_" : "g_") + id + ".json");
+    static File schedFile(Context ctx, boolean teacher, String id) {
+        return new File(ctx.getCacheDir(), (teacher ? "t_" : "g_") + id + ".json");
+    }
+
+    private static File dataFile(Context ctx, String id) {
+        return new File(ctx.getFilesDir(), "g_" + id + ".json");
+    }
+
+    /** Most recently used group ids, newest first, at most two. */
+    private static List<String> recents(Context ctx) {
+        String v = ctx.getSharedPreferences("sched", Context.MODE_PRIVATE).getString(PREF_RECENT, "");
+        List<String> out = new ArrayList<>();
+        for (String s : v.split(","))
+            if (!s.isEmpty()) out.add(s);
+        return out;
+    }
+
+    /** Make id the most recent group and mirror the recents into the data dir. */
+    static void touchRecent(Context ctx, String id) {
+        List<String> ids = recents(ctx);
+        ids.remove(id);
+        ids.add(0, id);
+        while (ids.size() > 2) ids.remove(2);
+        StringBuilder sb = new StringBuilder();
+        for (String s : ids) {
+            if (sb.length() > 0) sb.append(',');
+            sb.append(s);
+        }
+        ctx.getSharedPreferences("sched", Context.MODE_PRIVATE).edit()
+           .putString(PREF_RECENT, sb.toString()).apply();
+        for (String s : ids) {
+            File c = schedFile(ctx, false, s), d = dataFile(ctx, s);
+            if (c.exists() && !d.exists()) mirror(c, d);
+        }
+        File[] strays = ctx.getFilesDir().listFiles((dir, n) -> n.startsWith("g_") && n.endsWith(".json"));
+        if (strays != null)
+            for (File f : strays)
+                if (!ids.contains(f.getName().substring(2, f.getName().length() - 5)))
+                    f.delete();
+    }
+
+    /** Copy with the original timestamp: a mirror must look exactly as old. */
+    private static void mirror(File src, File dst) {
+        try {
+            write(dst, read(src));
+            dst.setLastModified(src.lastModified());
+        } catch (Exception ignored) { }
+    }
+
+    /** One-time move of the pre-split layout where everything sat in filesDir. */
+    private static void migrate(Context ctx) {
+        SharedPreferences p = ctx.getSharedPreferences("sched", Context.MODE_PRIVATE);
+        if (p.getBoolean("migrated", false)) return;
+        synchronized (Smtu.class) {
+            if (p.getBoolean("migrated", false)) return;
+            File[] legacy = ctx.getFilesDir().listFiles((dir, n) -> n.equals("groups.json")
+                    || ((n.startsWith("g_") || n.startsWith("t_")) && n.endsWith(".json")));
+            if (legacy != null)
+                for (File f : legacy) {
+                    File to = new File(ctx.getCacheDir(), f.getName());
+                    if (f.renameTo(to)) continue;
+                    try { write(to, read(f)); to.setLastModified(f.lastModified()); f.delete(); }
+                    catch (Exception ignored) { }
+                }
+            File[] plans = ctx.getFilesDir().listFiles((dir, n) -> n.startsWith("map_") && n.endsWith(".pdf"));
+            if (plans != null) for (File f : plans) f.delete(); // the in-app viewer is gone
+            String gid = p.getString("groupId", null);
+            if (gid != null) touchRecent(ctx, gid);
+            p.edit().putBoolean("migrated", true).apply();
+        }
     }
 
     // ------------------------------------------------------------------- net
