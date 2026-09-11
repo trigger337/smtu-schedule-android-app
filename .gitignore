@@ -11,7 +11,7 @@ local.properties
 *.iml
 .vscode/
 
-# Signing (never commit keys)
+# Signing (never commit keys — CI injects them from protected variables)
 keystore.properties
 *.jks
 *.keystore

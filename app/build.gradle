@@ -2,13 +2,14 @@ plugins {
     id 'com.android.application'
 }
 
-// Optional release signing: put a keystore.properties in the project root with
+// Optional release signing: a keystore.properties in the project root with
 //   storeFile=/absolute/or/relative/path.jks
 //   storePassword=...
 //   keyAlias=...
 //   keyPassword=...
-// Without it, release builds fall back to the debug key so the APK stays
-// installable (fine for personal use; use a real key before publishing).
+// CI writes this file from protected variables; without it, release builds
+// fall back to the debug key — fine locally, but only the CI-signed APKs
+// share one stable signature that installs over previous releases.
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
@@ -26,8 +27,8 @@ android {
         applicationId "com.korabel.schedule"
         minSdk 23
         targetSdk 34
-        versionCode 2
-        versionName "1.1.0"
+        versionCode 3
+        versionName "1.2.0"
     }
 
     buildFeatures {
@@ -65,6 +66,16 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // Distinct, versioned APK file names: smtu-schedule-v1.2.0.apk and
+    // smtu-schedule-v1.2.0-debug.apk instead of app-release/app-debug.
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            output.outputFileName = variant.buildType.name == "release"
+                    ? "smtu-schedule-v${variant.versionName}.apk"
+                    : "smtu-schedule-v${variant.versionName}-debug.apk"
+        }
     }
 }
 

@@ -1,6 +1,7 @@
-# CI: debug APK on main pushes; on vX.Y.Z tags build release+debug,
-# publish both APKs as generic packages (app_release/app_debug) and create
-# the GitLab release. Uses only CI_JOB_TOKEN — no PAT or CI variables.
+# CI: debug APK on main pushes; on vX.Y.Z tags build release+debug and
+# publish both APKs as generic packages (app_release/app_debug) with the
+# versioned file names. The GitLab release itself is created manually.
+# Uses only CI_JOB_TOKEN — no PAT or CI variables.
 
 stages: [build, publish]
 
@@ -47,7 +48,7 @@ build_debug:
     name: "app-debug-$CI_COMMIT_SHORT_SHA"
     expire_in: 1 week
     paths:
-      - app/build/outputs/apk/debug/app-debug.apk
+      - app/build/outputs/apk/debug/smtu-schedule-v*-debug.apk
 
 build_release:
   stage: build
@@ -57,13 +58,21 @@ build_release:
   <<: *gradle_cache
   before_script: *setup_sdk
   script:
+    # Signing key comes from CI variables (Settings → CI/CD → Variables):
+    #   KEYSTORE_BASE64 (base64 of the .jks), KEYSTORE_PASSWORD,
+    #   KEY_ALIAS, KEY_PASSWORD — all masked+protected. Without them the
+    #   release build falls back to the debug key.
+    - if [ -n "$KEYSTORE_BASE64" ]; then
+        echo "$KEYSTORE_BASE64" | base64 -d > release.jks &&
+        printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties;
+      fi
     - ./gradlew --quiet assembleRelease assembleDebug
   artifacts:
     name: "app-$CI_COMMIT_TAG"
     expire_in: never
     paths:
-      - app/build/outputs/apk/release/app-release.apk
-      - app/build/outputs/apk/debug/app-debug.apk
+      - app/build/outputs/apk/release/smtu-schedule-v*.apk
+      - app/build/outputs/apk/debug/smtu-schedule-v*-debug.apk
 
 publish_packages:
   stage: publish
@@ -72,36 +81,17 @@ publish_packages:
     - if: $CI_COMMIT_TAG
   needs: [build_release]
   script:
+    - REL_APK=$(ls app/build/outputs/apk/release/smtu-schedule-v*.apk)
+    - DBG_APK=$(ls app/build/outputs/apk/debug/smtu-schedule-v*-debug.apk)
     # Release APK -> package app_release v<tag>
     - >
       curl --fail --silent --show-error
       --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
-      --upload-file app/build/outputs/apk/release/app-release.apk
-      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_release/${CI_COMMIT_TAG}/app_release.apk"
+      --upload-file "${REL_APK}"
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_release/${CI_COMMIT_TAG}/$(basename ${REL_APK})"
     # Debug APK -> package app_debug v<tag>
     - >
       curl --fail --silent --show-error
       --header "JOB-TOKEN: ${CI_JOB_TOKEN}"
-      --upload-file app/build/outputs/apk/debug/app-debug.apk
-      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_debug/${CI_COMMIT_TAG}/app_debug.apk"
-
-publish_release:
-  stage: publish
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
-  rules:
-    - if: $CI_COMMIT_TAG
-  needs: [publish_packages]
-  script:
-    - echo "Creating release $CI_COMMIT_TAG"
-  release:
-    tag_name: "$CI_COMMIT_TAG"
-    name: "Расписание СПбГМТУ $CI_COMMIT_TAG"
-    description: "Обновление приложения: виджеты, карты корпусов, тёмная тема, проверка обновлений. APK — во вложениях (app_release.apk / app_debug.apk)."
-    assets:
-      links:
-        - name: app_release.apk
-          url: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_release/${CI_COMMIT_TAG}/app_release.apk"
-          link_type: package
-        - name: app_debug.apk
-          url: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_debug/${CI_COMMIT_TAG}/app_debug.apk"
-          link_type: package
+      --upload-file "${DBG_APK}"
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/app_debug/${CI_COMMIT_TAG}/$(basename ${DBG_APK})"
