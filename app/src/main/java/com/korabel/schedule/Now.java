@@ -90,6 +90,47 @@ public final class Now {
         return new SimpleDateFormat("EEEE", Dates.RU).format(c.getTime());
     }
 
+    /** Lesson-card backdrop: band color resource + colored share of the card. */
+    public static final class Band {
+        public final int colorRes;
+        public final float frac;
+        Band(int colorRes, float frac) { this.colorRes = colorRes; this.frac = frac; }
+    }
+
+    /** Backdrop color by lesson type: practice orange, lectures and labs red. */
+    public static int typeFillRes(String type) {
+        return type != null && type.toLowerCase(Dates.RU).contains("практ")
+                ? R.color.fill_practice : R.color.fill_lecture;
+    }
+
+    /**
+     * Backdrop of one slot on its own day: the colored band is the time
+     * left — full for future lessons, draining while the lesson runs or
+     * while the break before the first upcoming lesson runs (both blue),
+     * gone (all gray) once it is over. slots is the day's slots sorted by
+     * start; idx picks one. A day entirely past is all gray, entirely
+     * future all colored.
+     */
+    public static Band band(Calendar day, List<Slot> slots, int idx) {
+        Slot s = slots.get(idx);
+        int cmp = day.compareTo(Dates.today());
+        if (cmp < 0) return new Band(R.color.fill_past, 0f);
+        if (cmp > 0) return new Band(typeFillRes(s.type), 1f);
+        int a = startMin(s), b = endMin(s);
+        if (a < 0 || b <= a) return new Band(typeFillRes(s.type), 1f); // unparseable: static
+        Calendar now = Calendar.getInstance();
+        int nm = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
+        if (nm >= b) return new Band(R.color.fill_past, 0f);
+        if (nm >= a) return new Band(R.color.fill_now, (b - nm) / (float) (b - a));
+        int gapStart = 8 * 60;                       // the day starts around 08:00, as compute() assumes
+        for (int j = 0; j < idx; j++)                // parallel slots share a start; the break lies before that block
+            if (startMin(slots.get(j)) < a)
+                gapStart = Math.max(gapStart, endMin(slots.get(j)));
+        if (nm >= gapStart && a > gapStart)
+            return new Band(R.color.fill_now, (a - nm) / (float) (a - gapStart));
+        return new Band(typeFillRes(s.type), 1f);
+    }
+
     public static State compute(Context ctx, List<Slot> all) {
         State st = new State();
         Calendar now = Calendar.getInstance();

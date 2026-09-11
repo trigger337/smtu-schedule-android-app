@@ -17,6 +17,11 @@
     <color name="chip_sel">#DDE1F9</color>
     <color name="today_bg">#E8EAF6</color>
 
+    <color name="fill_lecture">#2EE53935</color>
+    <color name="fill_practice">#2EFB8C00</color>
+    <color name="fill_now">#2E3F51B5</color>
+    <color name="fill_past">#2E9E9E9E</color>
+
     <color name="w_bg">#FFFFFF</color>
     <color name="w_text">#212121</color>
     <color name="w_sub">#757575</color>
