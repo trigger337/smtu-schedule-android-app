@@ -63,8 +63,16 @@ only, no downloads.
 
 - Группа выбирается один раз (поиск по всем 449 группам) и сохраняется;
   смена — тапом по названию группы в шапке
-- Просмотр по неделе (Пн–Вс) и по дню с быстрым переключением дней, навигация
-  ‹ › на весь семестр (одна загрузка — и всё расписание уже на устройстве)
+- Просмотр по неделе (Пн–Вс) и по дню с быстрым переключением дней; выбранный
+  режим запоминается между запусками; навигация ‹ › на весь семестр (одна
+  загрузка — и всё расписание уже на устройстве)
+- В дневном режиме дни листаются свайпом влево/вправо, короткий резкий свайп —
+  до трёх дней за раз; недельный режим при открытии сам прокручивается к
+  сегодняшнему дню
+- Подложка каждой пары живёт по часам: лекции и лабораторные — красные, практики —
+  оранжевые, прошедшие пары — серые; идущая пара и перемена до следующей — синяя
+  полоса, убывающая сверху вниз (цветное — оставшееся время), и обновляется
+  поминутно без прокрутки списка
 - Компактные колонки времени (начало–конец в три строки) и аудитории
   (номер / корпус) — больше места предмету
 - Светлая и тёмная темы по системной настройке (включая виджеты)
@@ -130,9 +138,11 @@ only, no downloads.
       java/com/korabel/schedule/
         Smtu.java               клиент smtu.ru: загрузка, парсер карточек, кэш, чётность
         MainActivity.java       интерфейс приложения (кнопки/списки кодом)
-        Now.java                машина состояний «сейчас/перемена/далее» + общий путь данных виджетов
+        Now.java                машина состояний «сейчас/перемена/далее» + цвета подложки-прогресса + общий путь данных виджетов
+        FillDrawable.java       подложка-прогресс пары: серый фон + убывающая цветная полоса
         WidgetArt.java          canvas-рисование: полоса часа, кольцо, панель расписания
         WidgetUpdater.java      рендер всех виджетов + самопланируемые будильники
+        WidgetAlarmReceiver.java будильник виджетов — перезапуск рендера
         WidgetClickReceiver.java тап = обновление, двойной тап = открыть приложение
         TimerWidgetProvider.java / NameWidgetProvider.java / AgendaWidgetProvider.java
         SystemReceiver.java     BOOT/TIME_SET/TIMEZONE/… — перезапуск будильников
@@ -221,8 +231,15 @@ offline support, instant startup, and past lessons survive page edits.
 
 - Pick your group once (searchable list of all 449 groups) — saved on device;
   tap the group name in the header to change it later
-- Week view (Mon–Sun) and day view with weekday quick-switch, ‹ › navigation
-  across the whole semester (one fetch has it all)
+- Week view (Mon–Sun) and day view with weekday quick-switch; the chosen
+  mode is remembered across launches; ‹ › navigation across the whole
+  semester (one fetch has it all)
+- In day view, swipe left/right to page between days — a short, hard flick
+  covers up to three days at once; week view opens scrolled to today
+- Every lesson card carries a clock-aware backdrop: lectures and labs red,
+  practice orange, finished lessons gray; the ongoing lesson and the break
+  before the next one get a blue band draining top-to-bottom (the colored
+  part is the time left), refreshed per minute without moving the list
 - Compact time column (start–end on three lines) and room column
   (number / building) — more room for the subject
 - System light/dark theme (widgets included)
@@ -292,9 +309,11 @@ in the ⓘ dialog. No auto-installs.
       java/com/korabel/schedule/
         Smtu.java               smtu.ru client: fetch, card-view parser, cache, parity
         MainActivity.java       the app UI (programmatic views)
-        Now.java                the "now/break/next" state machine + shared widget data path
+        Now.java                the "now/break/next" state machine + progress-backdrop colors + shared widget data path
+        FillDrawable.java       lesson progress backdrop: gray base + draining color band
         WidgetArt.java          canvas drawing: hour bar, ring, agenda panel
         WidgetUpdater.java      renders all widgets + self-rescheduling alarms
+        WidgetAlarmReceiver.java the widget tick alarm — re-runs the renderer
         WidgetClickReceiver.java tap = refresh, double tap = open the app
         TimerWidgetProvider.java / NameWidgetProvider.java / AgendaWidgetProvider.java
         SystemReceiver.java     BOOT/TIME_SET/TIMEZONE/… — restart the alarms
