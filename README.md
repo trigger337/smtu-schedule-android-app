@@ -147,7 +147,7 @@ only, no downloads.
         TimerWidgetProvider.java / NameWidgetProvider.java / AgendaWidgetProvider.java
         SystemReceiver.java     BOOT/TIME_SET/TIMEZONE/… — перезапуск будильников
         UpdateChecker.java      проверка релизов GitLab
-        Maps.java               планы корпусов: таблица, скачивание, PdfRenderer, зум
+        Maps.java               таблица корпусов → ссылки на официальные планы (isu.smtu.ru)
         Dates.java              помощники для дат
 
 ### Сборка
@@ -180,8 +180,8 @@ CI (`.gitlab-ci.yml`) собирает debug на каждый push в main, а 
   университета, похоже, отклоняет часть не-российских IP, поэтому при VPN с
   зарубежным выходом первая загрузка может не пройти — приложение продолжит
   работать из кэша. Сеть используется только при запуске и по кнопке ⟳
-  (виджеты — раз в 12 ч при устаревшем кэше).
-- Планы корпусов качаются с isu.smtu.ru (первый показ карты), дальше — офлайн.
+  (виджеты — раз в 12 ч при устаревшем кэше). Планы корпусов открываются
+  в браузере и приложением не скачиваются.
 - Min SDK 23 (Android 6.0), target SDK 34.
 
 ### Лицензия
@@ -288,12 +288,10 @@ tick.
 ### Building maps
 
 For buildings А, Б and У the lesson dialog has a «🗺 Корпус У, 5 этаж — на
-карте» line: the official floor plan (smtu.ru/ru/page/201) downloads once
-(~2–4 MB per building) into private storage and then works offline; the
-floor is the leading digit of the room number (page N = floor N, verified
-against the «N ЭТАЖ» stamps in the scans). Rendered with the framework
-`PdfRenderer` and pinch-zoom. Buildings Г and М have no published plans —
-an address dialog is shown instead.
+карте» line: it opens the official floor plan (smtu.ru/ru/page/201, hosted
+on isu.smtu.ru) in the browser — viewing and zooming stay on the site's
+side. The floor is the first digit of the room number. Buildings Г and М
+have no published plans — an address dialog is shown instead.
 
 ### Updates
 
@@ -318,7 +316,7 @@ in the ⓘ dialog. No auto-installs.
         TimerWidgetProvider.java / NameWidgetProvider.java / AgendaWidgetProvider.java
         SystemReceiver.java     BOOT/TIME_SET/TIMEZONE/… — restart the alarms
         UpdateChecker.java      GitLab release check
-        Maps.java               building plans: table, download, PdfRenderer, zoom
+        Maps.java               building table -> links to the official plans (isu.smtu.ru)
         Dates.java              date helpers
 
 ### Building
@@ -351,8 +349,8 @@ packages and creates the GitLab release.
   server appears to refuse some non-Russian exit IPs, so on a VPN with a
   foreign endpoint the initial fetch may time out — the app then keeps
   working from cache. Fetches happen only at startup and on ⟳ (widgets:
-  once per 12 h when the cache is stale).
-- Building plans are fetched from isu.smtu.ru on first view, then offline.
+  once per 12 h when the cache is stale). Building plans open in the
+  browser and are never downloaded by the app.
 - Min SDK 23 (Android 6.0), target SDK 34.
 
 ### License
