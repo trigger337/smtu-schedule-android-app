@@ -64,7 +64,10 @@ build_release:
     #   release build falls back to the debug key.
     - if [ -n "$KEYSTORE_BASE64" ]; then
         echo "$KEYSTORE_BASE64" | base64 -d > release.jks &&
-        printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties;
+        printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties &&
+        sha256sum release.jks &&
+        keytool -list -keystore release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null &&
+        echo "keystore verified";
       fi
     - ./gradlew --quiet assembleRelease assembleDebug
   artifacts:
