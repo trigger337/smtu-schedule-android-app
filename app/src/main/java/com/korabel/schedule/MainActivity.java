@@ -2,12 +2,14 @@ package com.korabel.schedule;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.text.Editable;
 import android.text.SpannableString;
 import android.text.TextWatcher;
@@ -15,7 +17,10 @@ import android.text.method.LinkMovementMethod;
 import android.text.style.ClickableSpan;
 import android.text.style.RelativeSizeSpan;
 import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.Button;
@@ -23,6 +28,7 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.OverScroller;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -53,13 +59,21 @@ public final class MainActivity extends Activity {
     private static final String PREFS = "sched";
     private static final String PREF_GID = "groupId";
     private static final String PREF_GNAME = "groupName";
+    private static final String PREF_DAY = "dayMode";
     private static final Locale RU = new Locale("ru");
 
     // views
     private TextView tvGroup, tvRange, tvWeek, tvEmpty;
     private LinearLayout dayStrip;
-    private ListView list;
+    private ListView list;                 // primary page; the pager swaps in the alt one
+    private DayPager pager;
     private Button btnMode;
+
+    // the backdrop band moves once a minute — re-draw visible rows in place
+    private final Handler ticker = new Handler();
+    private final Runnable tickRun = new Runnable() {
+        @Override public void run() { refreshFills(); scheduleTick(); }
+    };
 
     // state
     private String groupId, groupName;
@@ -76,6 +90,7 @@ public final class MainActivity extends Activity {
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
         groupId = p.getString(PREF_GID, null);
         groupName = p.getString(PREF_GNAME, groupId == null ? null : groupId);
+        dayMode = p.getBoolean(PREF_DAY, false);
         if (savedInstanceState != null) {
             dayMode = savedInstanceState.getBoolean("day");
             anchor.setTimeInMillis(savedInstanceState.getLong("anchor"));
@@ -90,6 +105,17 @@ public final class MainActivity extends Activity {
         out.putBoolean("day", dayMode);
         out.putLong("anchor", anchor.getTimeInMillis());
         out.putInt("off", dayOffset);
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        refreshFills();
+        scheduleTick();
+    }
+
+    @Override protected void onPause() {
+        super.onPause();
+        ticker.removeCallbacks(tickRun);
     }
 
     // ------------------------------------------------------------------- data
@@ -161,7 +187,11 @@ public final class MainActivity extends Activity {
         btnMode.setTextSize(13);
         btnMode.setAllCaps(false);
         btnMode.setPadding(dp(12), 0, dp(12), 0);
-        btnMode.setOnClickListener(v -> { dayMode = !dayMode; render(); });
+        btnMode.setOnClickListener(v -> {
+            dayMode = !dayMode;
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(PREF_DAY, dayMode).apply();
+            render();
+        });
         row2.addView(btnMode, new LinearLayout.LayoutParams(-2, dp(36)));
 
         tvWeek = new TextView(this);
@@ -210,7 +240,9 @@ public final class MainActivity extends Activity {
         list.setDivider(null);
         list.setPadding(dp(8), 0, dp(8), dp(16));
         list.setClipToPadding(false);
-        body.addView(list, new FrameLayout.LayoutParams(-1, -1));
+        pager = new DayPager(this);
+        pager.addView(list, new FrameLayout.LayoutParams(-1, -1));
+        body.addView(pager, new FrameLayout.LayoutParams(-1, -1));
         list.setEmptyView(tvEmpty);
 
         return root;
@@ -227,21 +259,38 @@ public final class MainActivity extends Activity {
     // -------------------------------------------------------------- rendering
 
     private void render() {
+        pager.reset();
+        renderPage();
+        updateChrome();
+    }
+
+    /** Rebuild the visible list only — the pager calls this on its own swaps. */
+    private void renderPage() {
+        if (dayMode) {
+            list.setAdapter(new RowsAdapter(rowsFor(Dates.plus(anchor, dayOffset))));
+        } else {
+            List<Row> rows = new ArrayList<>();
+            for (int i = 0; i < 7; i++) rows.addAll(rowsFor(Dates.plus(anchor, i)));
+            list.setAdapter(new RowsAdapter(rows));
+            for (int i = 0; i < rows.size(); i++)      // open the week on today
+                if (rows.get(i).today && rows.get(i).slot == null) { list.setSelection(i); break; }
+        }
+    }
+
+    /** Header + lesson rows of one day, sharing that day's sorted slot list. */
+    private List<Row> rowsFor(Calendar day) {
+        List<Slot> of = Now.slotsOf(this, slots, day);
+        Collections.sort(of, (a, b) -> Now.startMin(a) - Now.startMin(b));
+        List<Row> rows = new ArrayList<>();
+        boolean today = Dates.isToday(day);
+        rows.add(new Row(day, today, null, of, -1));
+        for (int i = 0; i < of.size(); i++) rows.add(new Row(day, today, of.get(i), of, i));
+        return rows;
+    }
+
+    private void updateChrome() {
         btnMode.setText(dayMode ? "▶ Неделя" : "▶ День");
         buildDayStrip();
-
-        List<Object> rows = new ArrayList<>();
-        if (dayMode) {
-            Calendar day = Dates.plus(anchor, dayOffset);
-            rows.add(new DayHeader(day, Dates.isToday(day)));
-            rows.addAll(Now.slotsOf(this, slots, day));
-        } else {
-            for (int i = 0; i < 7; i++) {
-                Calendar day = Dates.plus(anchor, i);
-                rows.add(new DayHeader(day, Dates.isToday(day)));
-                rows.addAll(Now.slotsOf(this, slots, day));
-            }
-        }
         tvEmpty.setText(slots.isEmpty()
                 ? "Нет данных.\nНажмите ⟳ при подключении к сети."
                 : "Занятий нет.");
@@ -251,8 +300,6 @@ public final class MainActivity extends Activity {
         tvWeek.setText(upper ? "ВЕРХНЯЯ НЕДЕЛЯ" : "НИЖНЯЯ НЕДЕЛЯ");
         tvWeek.setBackgroundColor(upper ? getColor(R.color.week_upper) : getColor(R.color.week_lower));
         tvWeek.setTextColor(Color.WHITE);
-
-        list.setAdapter(new RowsAdapter(rows));
     }
 
     private String rangeText() {
@@ -272,14 +319,15 @@ public final class MainActivity extends Activity {
     // ------------------------------------------------------------- navigation
 
     private void shift(int dir) {
-        if (dayMode) {
-            dayOffset += dir;
-            while (dayOffset > 6) { dayOffset -= 7; anchor.add(Calendar.DAY_OF_YEAR, 7); }
-            while (dayOffset < 0) { dayOffset += 7; anchor.add(Calendar.DAY_OF_YEAR, -7); }
-        } else {
-            anchor.add(Calendar.DAY_OF_YEAR, 7 * dir);
-        }
+        if (dayMode) stepDay(dir);
+        else anchor.add(Calendar.DAY_OF_YEAR, 7 * dir);
         render(); // full semester is already loaded: no refetch needed
+    }
+
+    private void stepDay(int dir) {
+        dayOffset += dir;
+        while (dayOffset > 6) { dayOffset -= 7; anchor.add(Calendar.DAY_OF_YEAR, 7); }
+        while (dayOffset < 0) { dayOffset += 7; anchor.add(Calendar.DAY_OF_YEAR, -7); }
     }
 
     private void buildDayStrip() {
@@ -306,46 +354,50 @@ public final class MainActivity extends Activity {
 
     // ----------------------------------------------------------- list adapter
 
-    private static final class DayHeader {
-        final Calendar day; final boolean today;
-        DayHeader(Calendar d, boolean t) { day = d; today = t; }
+    /** One list row: a day header (slot == null) or a lesson of that day. */
+    private static final class Row {
+        final Calendar day; final boolean today; final Slot slot;
+        final List<Slot> daySlots; final int idx;   // slot's index in daySlots, -1 for the header
+        Row(Calendar d, boolean t, Slot s, List<Slot> of, int i) {
+            day = d; today = t; slot = s; daySlots = of; idx = i;
+        }
     }
 
     private final class RowsAdapter extends BaseAdapter {
-        private final List<Object> rows;
-        RowsAdapter(List<Object> rows) { this.rows = rows; }
+        private final List<Row> rows;
+        RowsAdapter(List<Row> rows) { this.rows = rows; }
 
         @Override public int getCount() { return rows.size(); }
         @Override public Object getItem(int i) { return rows.get(i); }
         @Override public long getItemId(int i) { return i; }
 
         @Override public View getView(int i, View convert, ViewGroup parent) {
-            Object o = rows.get(i);
-            return (o instanceof DayHeader) ? headerView((DayHeader) o, convert)
-                                            : lessonView((Slot) o, convert);
+            Row r = rows.get(i);
+            return r.slot == null ? headerView(r, convert) : lessonView(r, convert);
         }
 
-        private View headerView(DayHeader h, View convert) {
+        private View headerView(Row r, View convert) {
             TextView tv = (convert instanceof TextView) ? (TextView) convert : new TextView(MainActivity.this);
-            String label = new SimpleDateFormat("EEEE, d MMMM", RU).format(h.day.getTime());
+            String label = new SimpleDateFormat("EEEE, d MMMM", RU).format(r.day.getTime());
             label = Character.toUpperCase(label.charAt(0)) + label.substring(1);
-            tv.setText(label + (h.today ? "  •  сегодня" : ""));
+            tv.setText(label + (r.today ? "  •  сегодня" : ""));
             tv.setTextSize(13);
             tv.setTypeface(Typeface.DEFAULT_BOLD);
             tv.setTextColor(getColor(R.color.text_muted));
-            tv.setBackgroundColor(h.today ? getColor(R.color.today_bg) : getColor(R.color.header_bg));
+            tv.setBackgroundColor(r.today ? getColor(R.color.today_bg) : getColor(R.color.header_bg));
             tv.setPadding(dp(12), dp(10), dp(12), dp(10));
             return tv;
         }
 
-        private View lessonView(final Slot s, View convert) {
+        private View lessonView(final Row r, View convert) {
+            final Slot s = r.slot;
             LinearLayout row = (convert instanceof LinearLayout) ? (LinearLayout) convert : null;
             if (row == null) {
                 row = new LinearLayout(MainActivity.this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setGravity(Gravity.CENTER_VERTICAL);
                 row.setPadding(dp(12), dp(10), dp(12), dp(10));
-                row.setBackgroundColor(getColor(R.color.row));
+                row.setBackground(new FillDrawable());   // translucent backdrop, see applyFill
 
                 TextView time = new TextView(MainActivity.this);
                 time.setId(1);
@@ -396,8 +448,230 @@ public final class MainActivity extends Activity {
             // room as two lines: number/label over building
             int sp = s.room.indexOf(' ');
             room.setText(sp > 0 ? s.room.substring(0, sp) + "\n" + s.room.substring(sp + 1) : s.room);
+            applyFill(r, row);
             row.setOnClickListener(v -> showLesson(s));
             return row;
+        }
+    }
+
+    /** Translucent backdrop of one lesson row: gray above, time-left band below. */
+    private void applyFill(Row r, View row) {
+        Now.Band b = Now.band(r.day, r.daySlots, r.idx);
+        ((FillDrawable) row.getBackground())
+                .set(getColor(R.color.row), getColor(R.color.fill_past), getColor(b.colorRes), b.frac);
+    }
+
+    /** Minute tick: redraw the backdrops of the visible rows, without rescrolling. */
+    private void refreshFills() {
+        if (!(list.getAdapter() instanceof RowsAdapter)) return;
+        RowsAdapter a = (RowsAdapter) list.getAdapter();
+        int first = list.getFirstVisiblePosition();
+        for (int p = first; p <= list.getLastVisiblePosition() && p < a.rows.size(); p++) {
+            Row r = a.rows.get(p);
+            View v = list.getChildAt(p - first);
+            if (r.slot != null && v instanceof LinearLayout) applyFill(r, v);
+        }
+    }
+
+    private void scheduleTick() {
+        ticker.removeCallbacks(tickRun);
+        ticker.postDelayed(tickRun, 61_000 - System.currentTimeMillis() % 60_000);
+    }
+
+    // ----------------------------------------------------------------- pager
+
+    /**
+     * Hand-rolled horizontal pager for day mode (the project deliberately
+     * has no dependencies, so no ViewPager): a finger-following drag between
+     * two ListViews with a fling that can chain up to three one-day slides.
+     * In week mode it never intercepts and the primary list fills it alone.
+     */
+    private final class DayPager extends FrameLayout {
+
+        private ListView alt;              // secondary page, created on first drag
+        private int side;                  // 0 none, +1 alt to the right (next day), -1 to the left
+        private float ofs;                 // primary page translation, <0 sliding toward next day
+        private final OverScroller sc;
+        private VelocityTracker vt;
+        private float downX, downY, baseOfs;
+        private boolean horiz, settling;
+        private int settleDir, settleLeft; // chained settle: direction and days still to go
+        private final int slop;
+
+        DayPager(Context c) {
+            super(c);
+            sc = new OverScroller(c);
+            slop = ViewConfiguration.get(c).getScaledPagingTouchSlop();
+        }
+
+        private int w() { return Math.max(1, getWidth()); }
+
+        void reset() {
+            settling = false;
+            sc.abortAnimation();
+            ofs = 0;
+            side = 0;
+            list.setTranslationX(0);
+            if (alt != null) { alt.setTranslationX(0); alt.setVisibility(GONE); }
+        }
+
+        private void bindAlt(int dir) {
+            if (alt == null) {
+                alt = new ListView(MainActivity.this);
+                alt.setDivider(null);
+                alt.setPadding(dp(8), 0, dp(8), dp(16));
+                alt.setClipToPadding(false);
+                addView(alt, 1, new FrameLayout.LayoutParams(-1, -1));
+            }
+            alt.setVisibility(VISIBLE);
+            alt.setAdapter(new RowsAdapter(rowsFor(Dates.plus(anchor, dayOffset + dir))));
+            side = dir;
+            applyOfs();
+        }
+
+        private void applyOfs() {
+            list.setTranslationX(ofs);
+            if (alt != null && side != 0) alt.setTranslationX(ofs + side * w());
+        }
+
+        private void trackStart(MotionEvent e) {
+            downX = e.getX();
+            downY = e.getY();
+            baseOfs = 0;
+            horiz = false;
+            if (vt != null) vt.recycle();
+            vt = VelocityTracker.obtain();
+            vt.addMovement(e);
+        }
+
+        @Override public boolean onInterceptTouchEvent(MotionEvent e) {
+            if (!dayMode) return false;
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    trackStart(e);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (vt != null) vt.addMovement(e);
+                    if (!horiz) {
+                        float dx = e.getX() - downX, dy = e.getY() - downY;
+                        if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy)) {
+                            if (!sc.isFinished()) {          // grab a settle already running
+                                ofs = sc.getCurrX();
+                                sc.abortAnimation();
+                                settling = false;
+                            }
+                            baseOfs = ofs;
+                            downX = e.getX();               // the drag continues from here
+                            horiz = true;
+                        }
+                    }
+                    if (horiz) return true;
+                    break;
+                default:
+                    if (vt != null) vt.addMovement(e);
+            }
+            return false;
+        }
+
+        @Override public boolean onTouchEvent(MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    trackStart(e);
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (vt != null) vt.addMovement(e);
+                    if (horiz) {
+                        ofs = Math.max(-w(), Math.min(w(), baseOfs + e.getX() - downX));
+                        if (Math.abs(ofs) > slop) {
+                            int d = ofs < 0 ? 1 : -1;       // which day alt should show
+                            if (side != d) bindAlt(d);
+                        }
+                        applyOfs();
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (vt != null) vt.addMovement(e);
+                    endDrag(e.getActionMasked() == MotionEvent.ACTION_CANCEL);
+                    return true;
+            }
+            return super.onTouchEvent(e);
+        }
+
+        private void endDrag(boolean cancel) {
+            float v = 0;
+            if (vt != null) {
+                if (!cancel && horiz) {
+                    vt.computeCurrentVelocity(1000, 15000);
+                    v = vt.getXVelocity();
+                }
+                vt.recycle();
+                vt = null;
+            }
+            if (!horiz) return;                             // never dragged: nothing to settle
+            horiz = false;
+            int d = 0;
+            if (!cancel) {
+                float proj = ofs + v * 0.22f;               // where the fling meant to land
+                d = Math.max(-3, Math.min(3, Math.round(-proj / w())));
+                if (d != 0 && side != 0 && side != (d > 0 ? 1 : -1)
+                        && Math.abs(ofs) > w() / 10) d = 0; // never teleport a visible page
+            }
+            settle(d);
+        }
+
+        private void settle(int d) {
+            settling = true;
+            settleLeft = d;
+            if (d != 0) {
+                settleDir = d > 0 ? 1 : -1;
+                if (side != settleDir) bindAlt(settleDir);
+            }
+            leg();
+        }
+
+        private void leg() {
+            int target = settleLeft == 0 ? 0 : -settleDir * w();
+            sc.startScroll(Math.round(ofs), 0, target - Math.round(ofs), 260);
+            postInvalidateOnAnimation();
+        }
+
+        @Override public void computeScroll() {
+            if (sc.computeScrollOffset()) {
+                ofs = sc.getCurrX();
+                applyOfs();
+                postInvalidateOnAnimation();
+            } else if (settling) {
+                legDone();
+            }
+        }
+
+        private void legDone() {
+            if (settleLeft == 0) {                           // slid back home
+                settling = false;
+                side = 0;
+                ofs = 0;
+                applyOfs();
+                if (alt != null) alt.setVisibility(GONE);
+                return;
+            }
+            ListView t = list;                               // promote the arriving page
+            list = alt;
+            alt = t;
+            stepDay(settleDir);
+            settleLeft -= settleDir;
+            ofs = 0;
+            list.setTranslationX(0);
+            if (settleLeft == 0) {
+                settling = false;
+                side = 0;
+                alt.setTranslationX(0);
+                alt.setVisibility(GONE);
+                updateChrome();
+            } else {
+                bindAlt(settleDir);
+                leg();
+            }
         }
     }
 
