@@ -27,8 +27,8 @@ android {
         applicationId "com.korabel.schedule"
         minSdk 23
         targetSdk 34
-        versionCode 3
-        versionName "1.2.0"
+        versionCode 4
+        versionName "1.2.1"
     }
 
     buildFeatures {
@@ -68,8 +68,8 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    // Distinct, versioned APK file names: smtu-schedule-v1.2.0.apk and
-    // smtu-schedule-v1.2.0-debug.apk instead of app-release/app-debug.
+    // Distinct, versioned APK file names: smtu-schedule-v1.2.1.apk and
+    // smtu-schedule-v1.2.1-debug.apk instead of app-release/app-debug.
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             output.outputFileName = variant.buildType.name == "release"
