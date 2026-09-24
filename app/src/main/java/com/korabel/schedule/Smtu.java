@@ -68,6 +68,7 @@ public final class Smtu {
         public String subject = "";
         public String type = "";       // Лекция / Практическое занятие / ...
         public String room = "";       // 167 Корпус У
+        public String group = "";      // group name (e.g. 12739-01)
         public String teacher = "";
         public String teacherId = "";  // viewperson id, "" when not linked
         public String dateRange = "";  // "14 сентября — 21 декабря 2026"
@@ -80,12 +81,12 @@ public final class Smtu {
             return c != 0 ? c : time.compareTo(o.time);
         }
 
-        String key() { return day + "|" + time + "|" + upper + "|" + subject + "|" + type + "|" + room + "|" + dates; }
+        String key() { return day + "|" + time + "|" + upper + "|" + subject + "|" + type + "|" + room + "|" + group + "|" + dates; }
 
         JSONObject toJson() throws Exception {
             JSONObject o = new JSONObject();
             o.put("day", day).put("time", time).put("upper", upper).put("subject", subject)
-             .put("type", type).put("room", room).put("teacher", teacher)
+             .put("type", type).put("room", room).put("group", group).put("teacher", teacher)
              .put("teacherId", teacherId).put("dateRange", dateRange)
              .put("dates", new JSONArray(dates));
             return o;
@@ -95,6 +96,7 @@ public final class Smtu {
             Slot s = new Slot();
             s.day = o.optString("day"); s.time = o.optString("time"); s.upper = o.optBoolean("upper");
             s.subject = o.optString("subject"); s.type = o.optString("type"); s.room = o.optString("room");
+            s.group = o.optString("group");
             s.teacher = o.optString("teacher"); s.teacherId = o.optString("teacherId");
             s.dateRange = o.optString("dateRange");
             JSONArray d = o.optJSONArray("dates");
@@ -136,7 +138,7 @@ public final class Smtu {
                 String path = teacher ? "/ru/viewschedule_new/teacher/" : "/ru/viewschedule_new/";
                 String html = httpGet(HOST + path + id + "/");
                 calibrateParity(ctx, html);
-                post(mergeAndStore(ctx, teacher, id, parseSchedule(html)), null, cb);
+                post(mergeAndStore(ctx, teacher, id, parseSchedule(html, ctx)), null, cb);
             } catch (Exception e) {
                 List<Slot> cached = readSlotCache(ctx, teacher, id);
                 post(cached, cached.isEmpty() ? "Нет сети: " + e.getMessage() : null, cb);
@@ -157,9 +159,9 @@ public final class Smtu {
      * 2026-08-31 is upper.
      */
     public static boolean isUpperWeek(Context ctx, Calendar date) {
-        SharedPreferences p = ctx.getSharedPreferences("sched", Context.MODE_PRIVATE);
-        long anchor = p.getLong("parityAnchor", 0);
-        boolean anchorUpper = p.getBoolean("parityAnchorUpper", true);
+        SharedPreferences p = ctx != null ? ctx.getSharedPreferences("sched", Context.MODE_PRIVATE) : null;
+        long anchor = p != null ? p.getLong("parityAnchor", 0) : 0;
+        boolean anchorUpper = p != null ? p.getBoolean("parityAnchorUpper", true) : true;
         if (anchor == 0) { // constant fallback: Monday 2026-08-31 was upper
             Calendar c = Calendar.getInstance();
             c.set(2026, Calendar.AUGUST, 31, 0, 0, 0);
@@ -175,7 +177,7 @@ public final class Smtu {
 
     /** /ru/viewschedule_new/&lt;id&gt;/ links with display names, in page order. */
     static List<Group> parseGroups(String html) {
-        Pattern link = Pattern.compile("<a[^>]+href=\"/ru/viewschedule_new/(\\d+)/\"[^>]*>(.*?)</a>", Pattern.DOTALL);
+        Pattern link = Pattern.compile("<a[^>]+href=\"/ru/viewschedule_new/(\\d+)/?\"[^>]*>(.*?)</a>", Pattern.DOTALL);
         Map<String, Group> byId = new TreeMap<>();
         Matcher m = link.matcher(html);
         while (m.find()) {
@@ -185,8 +187,239 @@ public final class Smtu {
         return new ArrayList<>(byId.values());
     }
 
-    /** Card-view parser shared by group and teacher schedule pages. */
+    /** Multi-engine parser: table-view primary, card-view secondary, legacy fallback. */
     static List<Slot> parseSchedule(String html) {
+        return parseSchedule(html, null);
+    }
+
+    static List<Slot> parseSchedule(String html, Context ctx) {
+        List<Slot> out = parseTableSchedule(html, ctx);
+        if (out.isEmpty()) out = parseCardSchedule(html, ctx);
+        if (out.isEmpty()) out = parseLegacySchedule(html);
+        Collections.sort(out);
+        return out;
+    }
+
+    /** Primary engine: parses server-rendered #table-container with full column data. */
+    private static List<Slot> parseTableSchedule(String html, Context ctx) {
+        List<Slot> out = new ArrayList<>();
+        int tIdx = html.indexOf("id=\"table-container\"");
+        if (tIdx < 0) return out;
+        int endIdx = html.indexOf("</main>", tIdx);
+        String tableHtml = endIdx < 0 ? html.substring(tIdx) : html.substring(tIdx, endIdx);
+
+        Matcher dayM = Pattern.compile("<h3[^>]*class=\"[^\"]*h5[^\"]*\"[^>]*>(.*?)</h3>", Pattern.DOTALL).matcher(tableHtml);
+        List<int[]> daySpans = new ArrayList<>();
+        List<String> dayNames = new ArrayList<>();
+        while (dayM.find()) {
+            daySpans.add(new int[]{dayM.start(), dayM.end()});
+            dayNames.add(stripTags(dayM.group(1)).trim());
+        }
+
+        Pattern rowPat = Pattern.compile("<tr[^>]*class=\"[^\"]*js-week-container[^\"]*\"[^>]*id=\"([^\"]+)\"[^>]*>(.*?)</tr>", Pattern.DOTALL);
+        Pattern cellPat = Pattern.compile("<(?:td|th)[^>]*>(.*?)</(?:td|th)>", Pattern.DOTALL);
+        Pattern timePat = Pattern.compile("(\\d{1,2}:\\d{2})\\s*[-–]\\s*(\\d{1,2}:\\d{2})");
+        Pattern subjPat = Pattern.compile("<span>(.*?)</span>", Pattern.DOTALL);
+        Pattern typePat = Pattern.compile("<small[^>]*class=\"[^\"]*text-muted[^\"]*\"[^>]*>(.*?)</small>", Pattern.DOTALL);
+        Pattern smallPat = Pattern.compile("<small(?![^>]*text-muted)[^>]*>(.*?)</small>", Pattern.DOTALL);
+        Pattern personPat = Pattern.compile("<a[^>]*href=[\"']/ru/viewperson/(\\d+)/?[\"'][^>]*>(.*?)</a>", Pattern.DOTALL);
+
+        for (int i = 0; i < daySpans.size(); i++) {
+            String day = dayNames.get(i);
+            int start = daySpans.get(i)[1];
+            int end = (i + 1 < daySpans.size()) ? daySpans.get(i + 1)[0] : tableHtml.length();
+            String chunk = tableHtml.substring(start, end);
+
+            Matcher rm = rowPat.matcher(chunk);
+            while (rm.find()) {
+                String weekId = rm.group(1);
+                String rowContent = rm.group(2);
+
+                List<String> cells = new ArrayList<>();
+                Matcher cm = cellPat.matcher(rowContent);
+                while (cm.find()) cells.add(cm.group(1));
+                if (cells.size() < 6) continue;
+
+                String time = "";
+                Matcher tm = timePat.matcher(cells.get(0));
+                if (tm.find()) time = tm.group(1) + " - " + tm.group(2);
+
+                String room = stripTags(cells.get(2)).trim();
+                String group = stripTags(cells.get(3)).trim();
+
+                String col4 = cells.get(4);
+                String subject = "";
+                Matcher sm = subjPat.matcher(col4);
+                if (sm.find()) subject = stripTags(sm.group(1)).trim();
+
+                String type = "";
+                Matcher tym = typePat.matcher(col4);
+                if (tym.find()) type = stripTags(tym.group(1)).trim();
+
+                List<String> notes = new ArrayList<>();
+                Matcher snm = smallPat.matcher(col4);
+                while (snm.find()) {
+                    String note = stripTags(snm.group(1)).trim();
+                    if (!note.isEmpty()) notes.add(note);
+                }
+                StringBuilder dr = new StringBuilder();
+                for (String note : notes) {
+                    if (dr.length() > 0) dr.append(", ");
+                    dr.append(note);
+                }
+                String dateRange = dr.toString();
+
+                String col5 = cells.get(5);
+                String teacher = "";
+                String teacherId = "";
+                Matcher pm = personPat.matcher(col5);
+                if (pm.find()) {
+                    teacherId = pm.group(1);
+                    teacher = stripTags(pm.group(2)).trim();
+                } else {
+                    teacher = stripTags(col5).trim();
+                }
+
+                if (subject.isEmpty()) continue;
+
+                boolean both = weekId.contains("both");
+                boolean up = weekId.contains("up");
+
+                if (both) {
+                    Slot s1 = createSlot(day, time, true, subject, type, room, group, teacher, teacherId, dateRange);
+                    expandDates(s1, ctx);
+                    out.add(s1);
+                    Slot s2 = createSlot(day, time, false, subject, type, room, group, teacher, teacherId, dateRange);
+                    expandDates(s2, ctx);
+                    out.add(s2);
+                } else {
+                    Slot s = createSlot(day, time, up, subject, type, room, group, teacher, teacherId, dateRange);
+                    expandDates(s, ctx);
+                    out.add(s);
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Secondary engine: parses server-rendered #card-container as a fallback. */
+    private static List<Slot> parseCardSchedule(String html, Context ctx) {
+        List<Slot> out = new ArrayList<>();
+        int cIdx = html.indexOf("id=\"card-container\"");
+        if (cIdx < 0) return out;
+        int endIdx = html.indexOf("id=\"table-container\"", cIdx);
+        if (endIdx < 0) endIdx = html.indexOf("</main>", cIdx);
+        String cardHtml = endIdx < 0 ? html.substring(cIdx) : html.substring(cIdx, endIdx);
+
+        Matcher dayM = Pattern.compile("<h2[^>]*class=\"[^\"]*h3[^\"]*\"[^>]*>(.*?)</h2>", Pattern.DOTALL).matcher(cardHtml);
+        List<int[]> daySpans = new ArrayList<>();
+        List<String> dayNames = new ArrayList<>();
+        while (dayM.find()) {
+            daySpans.add(new int[]{dayM.start(), dayM.end()});
+            dayNames.add(stripTags(dayM.group(1)).trim());
+        }
+
+        Pattern colPat = Pattern.compile("<div[^>]*class=\"[^\"]*\\bcol\\b[^\"]*\"[^>]*>(.*?)(?=<div[^>]*class=\"[^\"]*\\bcol\\b[^\"]*\"|$)", Pattern.DOTALL);
+        Pattern timePat = Pattern.compile("<h3[^>]*class=\"[^\"]*h5[^\"]*\"[^>]*>.*?<span>(\\d{1,2}:\\d{2})\\s*[-–]\\s*(\\d{1,2}:\\d{2})</span>", Pattern.DOTALL);
+        Pattern wkPat = Pattern.compile("<div[^>]*class=\"[^\"]*js-week-container[^\"]*\"[^>]*id=\"([^\"]+)\"[^>]*>(.*?)</div>\\s*(?=(?:<div[^>]*class=\"[^\"]*js-week-container|</div>\\s*</div>|</div>\\s*<div|$))", Pattern.DOTALL);
+        Pattern h3Pat = Pattern.compile("<h3[^>]*class=\"[^\"]*h6[^\"]*\"[^>]*>(.*?)</h3>", Pattern.DOTALL);
+        Pattern emPat = Pattern.compile("<em>(.*?)</em>", Pattern.DOTALL);
+        Pattern typePat = Pattern.compile("<small[^>]*class=\"[^\"]*text-muted[^\"]*\"[^>]*>(.*?)</small>", Pattern.DOTALL);
+        Pattern personPat = Pattern.compile("<a[^>]*href=[\"']/ru/viewperson/(\\d+)/?[\"'][^>]*>(.*?)</a>", Pattern.DOTALL);
+        Pattern dflexPat = Pattern.compile("<div[^>]*class=\"[^\"]*d-flex align-items-center[^\"]*\"[^>]*>(.*?)</div>", Pattern.DOTALL);
+
+        for (int i = 0; i < daySpans.size(); i++) {
+            String day = dayNames.get(i);
+            int start = daySpans.get(i)[1];
+            int end = (i + 1 < daySpans.size()) ? daySpans.get(i + 1)[0] : cardHtml.length();
+            String dayChunk = cardHtml.substring(start, end);
+
+            Matcher cm = colPat.matcher(dayChunk);
+            while (cm.find()) {
+                String cardContent = cm.group(1);
+                Matcher tm = timePat.matcher(cardContent);
+                if (!tm.find()) continue;
+                String time = tm.group(1) + " - " + tm.group(2);
+
+                Matcher wm = wkPat.matcher(cardContent);
+                while (wm.find()) {
+                    String weekId = wm.group(1);
+                    String chunk = wm.group(2);
+
+                    String subject = "";
+                    String dateRange = "";
+                    Matcher h3m = h3Pat.matcher(chunk);
+                    if (h3m.find()) {
+                        String h3 = h3m.group(1);
+                        String h3Clean = h3.replaceAll("<span[^>]*class=\"[^\"]*float-end[^\"]*\"[^>]*>.*?</span>", "");
+                        Matcher sm = Pattern.compile("<span>(.*?)</span>", Pattern.DOTALL).matcher(h3Clean);
+                        if (sm.find()) subject = stripTags(sm.group(1)).trim();
+                        else subject = stripTags(h3Clean).trim();
+
+                        Matcher snm = Pattern.compile("<small[^>]*>(.*?)</small>", Pattern.DOTALL).matcher(h3);
+                        List<String> notes = new ArrayList<>();
+                        while (snm.find()) {
+                            String note = stripTags(snm.group(1)).trim();
+                            if (!note.isEmpty()) notes.add(note);
+                        }
+                        StringBuilder dr = new StringBuilder();
+                        for (String n : notes) {
+                            if (dr.length() > 0) dr.append(", ");
+                            dr.append(n);
+                        }
+                        dateRange = dr.toString();
+                    }
+
+                    String room = "";
+                    String type = "";
+                    Matcher em = emPat.matcher(chunk);
+                    if (em.find()) {
+                        String emText = em.group(1);
+                        Matcher tym = typePat.matcher(emText);
+                        if (tym.find()) {
+                            type = stripTags(tym.group(1)).trim();
+                            room = stripTags(emText.substring(0, tym.start())).trim();
+                        } else {
+                            room = stripTags(emText).trim();
+                        }
+                    }
+
+                    String teacher = "";
+                    String teacherId = "";
+                    Matcher pm = personPat.matcher(chunk);
+                    if (pm.find()) {
+                        teacherId = pm.group(1);
+                        teacher = stripTags(pm.group(2)).trim();
+                    } else {
+                        Matcher dfm = dflexPat.matcher(chunk);
+                        if (dfm.find()) teacher = stripTags(dfm.group(1)).trim();
+                    }
+
+                    if (subject.isEmpty()) continue;
+
+                    boolean both = weekId.contains("both");
+                    boolean up = weekId.contains("up");
+
+                    if (both) {
+                        Slot s1 = createSlot(day, time, true, subject, type, room, "", teacher, teacherId, dateRange);
+                        expandDates(s1, ctx);
+                        out.add(s1);
+                        Slot s2 = createSlot(day, time, false, subject, type, room, "", teacher, teacherId, dateRange);
+                        expandDates(s2, ctx);
+                        out.add(s2);
+                    } else {
+                        Slot s = createSlot(day, time, up, subject, type, room, "", teacher, teacherId, dateRange);
+                        expandDates(s, ctx);
+                        out.add(s);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Legacy fallback parser for old archive HTML. */
+    private static List<Slot> parseLegacySchedule(String html) {
         List<Slot> out = new ArrayList<>();
         int i = 0;
         while ((i = html.indexOf("js-day-block", i)) >= 0) {
@@ -197,13 +430,13 @@ public final class Smtu {
             Matcher h2 = Pattern.compile("<h2[^>]*>(.*?)</h2>", Pattern.DOTALL).matcher(block);
             String day = h2.find() ? stripTags(h2.group(1)).trim() : "";
 
-            Matcher card = Pattern.compile("js-time-card.*?<span>(\\d\\d:\\d\\d - \\d\\d:\\d\\d)</span>(.*?)(?=js-time-card|js-day-block|$)", Pattern.DOTALL).matcher(block);
+            Matcher card = Pattern.compile("js-time-card.*?<span>(\\d\\d:\\d\\d(?:\\s*-\\s*|-)\\d\\d:\\d\\d)</span>(.*?)(?=js-time-card|js-day-block|$)", Pattern.DOTALL).matcher(block);
             while (card.find()) {
-                String time = card.group(1);
+                String time = card.group(1).replace(" ", "").replace("-", " - ");
                 String cardBody = card.group(2);
                 Matcher wk = Pattern.compile("js-week-container js-week-([12])(.*?)(?=js-week-container js-week|$)", Pattern.DOTALL).matcher(cardBody);
                 while (wk.find()) {
-                    Slot s = parseLesson(wk.group(2));
+                    Slot s = parseLessonLegacy(wk.group(2));
                     s.day = day;
                     s.time = time;
                     s.upper = "1".equals(wk.group(1));
@@ -212,37 +445,154 @@ public final class Smtu {
             }
             i = dayEnd;
         }
-        Collections.sort(out);
         return out;
     }
 
-    private static final Pattern SUBJECT = Pattern.compile("<h3[^>]*class=\"[^\"]*h6[^\"]*\"[^>]*>\\s*<span>(.*?)</span>", Pattern.DOTALL);
-    private static final Pattern DATES   = Pattern.compile("<p[^>]*class=\"[^\"]*text-muted[^\"]*\"[^>]*title=\"([^\"]*)\"");
-    private static final Pattern RANGE   = Pattern.compile("fa-calendar[^>]*></i>\\s*([^<]*)</p>");
-    private static final Pattern ROOM    = Pattern.compile("<p class=\"card-text[^\"]*\"[^>]*><em>(.*?)</em>", Pattern.DOTALL);
-    private static final Pattern TYPE    = Pattern.compile("<small class=\"text-muted\">([^<]*)</small>");
-    private static final Pattern PERSON  = Pattern.compile("<a href=\"/ru/viewperson/(\\d+)/\">\\s*<small>(.*?)</small>", Pattern.DOTALL);
-
-    private static Slot parseLesson(String chunk) {
+    private static Slot parseLessonLegacy(String chunk) {
         Slot s = new Slot();
-        Matcher m = SUBJECT.matcher(chunk);
+        Matcher m = Pattern.compile("<h3[^>]*class=\"[^\"]*h6[^\"]*\"[^>]*>\\s*<span>(.*?)</span>", Pattern.DOTALL).matcher(chunk);
         if (m.find()) s.subject = stripTags(m.group(1)).trim();
-        m = DATES.matcher(chunk);
+        m = Pattern.compile("<p[^>]*class=\"[^\"]*text-muted[^\"]*\"[^>]*title=\"([^\"]*)\"").matcher(chunk);
         if (m.find() && !m.group(1).isEmpty())
             for (String d : m.group(1).split("\\s*,\\s*"))
                 if (d.matches("\\d{2}\\.\\d{2}\\.\\d{4}")) s.dates.add(d);
-        m = RANGE.matcher(chunk);
+        m = Pattern.compile("fa-calendar[^>]*></i>\\s*([^<]*)</p>").matcher(chunk);
         if (m.find()) s.dateRange = m.group(1).trim();
-        m = ROOM.matcher(chunk);
+        m = Pattern.compile("<p class=\"card-text[^\"]*\"[^>]*><em>(.*?)</em>", Pattern.DOTALL).matcher(chunk);
         if (m.find()) {
             String em = m.group(1);
-            Matcher t = TYPE.matcher(em);
+            Matcher t = Pattern.compile("<small class=\"text-muted\">([^<]*)</small>").matcher(em);
             if (t.find()) { s.type = t.group(1).trim(); s.room = stripTags(em.substring(0, t.start())).trim(); }
             else s.room = stripTags(em).trim();
         }
-        m = PERSON.matcher(chunk);
+        m = Pattern.compile("<a href=\"/ru/viewperson/(\\d+)/\">\\s*<small>(.*?)</small>", Pattern.DOTALL).matcher(chunk);
         if (m.find()) { s.teacherId = m.group(1); s.teacher = stripTags(m.group(2)).trim(); }
         return s;
+    }
+
+    private static Slot createSlot(String day, String time, boolean upper, String subject,
+                                   String type, String room, String group,
+                                   String teacher, String teacherId, String dateRange) {
+        Slot s = new Slot();
+        s.day = day;
+        s.time = time;
+        s.upper = upper;
+        s.subject = subject;
+        s.type = type;
+        s.room = room;
+        s.group = group;
+        s.teacher = teacher;
+        s.teacherId = teacherId;
+        s.dateRange = dateRange;
+        return s;
+    }
+
+    /** Generates exact dd.MM.yyyy occurrences for date-bounded classes within the semester. */
+    private static void expandDates(Slot s, Context ctx) {
+        if (s.dateRange == null || s.dateRange.isEmpty() || s.day == null || s.day.isEmpty()) return;
+        int targetDow = dayOfWeek(s.day);
+        if (targetDow < 0) return;
+
+        Calendar now = Calendar.getInstance();
+        int curYear = now.get(Calendar.YEAR);
+
+        Calendar start = null;
+        Calendar end = null;
+
+        Matcher m1 = Pattern.compile("[сСcC]\\s*([0-9]{1,2}(?:\\.[0-9]{1,2}\\.?|\\s+[а-яёА-ЯЁ]+))\\s*(?:по|-|–)\\s*([0-9]{1,2}(?:\\.[0-9]{1,2}\\.?|\\s+[а-яёА-ЯЁ]+(?:\\s+[0-9]{4})?))").matcher(s.dateRange);
+        if (m1.find()) {
+            start = parseDateText(m1.group(1), curYear);
+            end = parseDateText(m1.group(2), curYear);
+        } else {
+            Matcher m2 = Pattern.compile("([0-9]{1,2}\\.[0-9]{1,2}\\.?)\\s*[-–]\\s*([0-9]{1,2}\\.[0-9]{1,2}(?:\\.[0-9]{4})?)").matcher(s.dateRange);
+            if (m2.find()) {
+                start = parseDateText(m2.group(1), curYear);
+                end = parseDateText(m2.group(2), curYear);
+            } else {
+                Matcher m3 = Pattern.compile("[сСcC]\\s*([0-9]{1,2}\\.[0-9]{1,2}\\.?)").matcher(s.dateRange);
+                if (m3.find()) {
+                    start = parseDateText(m3.group(1), curYear);
+                    if (start != null) {
+                        end = (Calendar) start.clone();
+                        end.set(Calendar.MONTH, Calendar.DECEMBER);
+                        end.set(Calendar.DAY_OF_MONTH, 31);
+                    }
+                }
+            }
+        }
+
+        if (start == null || end == null) return;
+        if (end.before(start)) end.add(Calendar.YEAR, 1);
+
+        Calendar cur = (Calendar) start.clone();
+        while (!cur.after(end)) {
+            if (cur.get(Calendar.DAY_OF_WEEK) == targetDow) {
+                if (isUpperWeek(ctx, cur) == s.upper) {
+                    s.dates.add(fmtRu(cur));
+                }
+            }
+            cur.add(Calendar.DAY_OF_YEAR, 1);
+        }
+    }
+
+    private static Calendar parseDateText(String raw, int curYear) {
+        if (raw == null) return null;
+        String s = raw.trim();
+        while (s.endsWith(".")) s = s.substring(0, s.length() - 1).trim();
+        try {
+            Matcher mDot = Pattern.compile("^([0-9]{1,2})\\.([0-9]{1,2})(?:\\.([0-9]{4}))?$").matcher(s);
+            if (mDot.matches()) {
+                int d = Integer.parseInt(mDot.group(1));
+                int mo = Integer.parseInt(mDot.group(2)) - 1;
+                int y = mDot.group(3) != null ? Integer.parseInt(mDot.group(3)) : curYear;
+                Calendar c = Calendar.getInstance();
+                c.set(y, mo, d, 0, 0, 0);
+                c.set(Calendar.MILLISECOND, 0);
+                return c;
+            }
+            Matcher mWords = Pattern.compile("^([0-9]{1,2})\\s+([а-яёА-ЯЁ]+)(?:\\s+([0-9]{4}))?$").matcher(s);
+            if (mWords.matches()) {
+                int d = Integer.parseInt(mWords.group(1));
+                int mo = parseRuMonth(mWords.group(2));
+                if (mo >= 0) {
+                    int y = mWords.group(3) != null ? Integer.parseInt(mWords.group(3)) : curYear;
+                    Calendar c = Calendar.getInstance();
+                    c.set(y, mo, d, 0, 0, 0);
+                    c.set(Calendar.MILLISECOND, 0);
+                    return c;
+                }
+            }
+        } catch (Exception ignored) { }
+        return null;
+    }
+
+    private static int parseRuMonth(String name) {
+        String n = name.toLowerCase(Locale.US);
+        if (n.startsWith("янв")) return Calendar.JANUARY;
+        if (n.startsWith("фев")) return Calendar.FEBRUARY;
+        if (n.startsWith("мар")) return Calendar.MARCH;
+        if (n.startsWith("апр")) return Calendar.APRIL;
+        if (n.startsWith("ма")) return Calendar.MAY;
+        if (n.startsWith("июн")) return Calendar.JUNE;
+        if (n.startsWith("июл")) return Calendar.JULY;
+        if (n.startsWith("авг")) return Calendar.AUGUST;
+        if (n.startsWith("сен")) return Calendar.SEPTEMBER;
+        if (n.startsWith("окт")) return Calendar.OCTOBER;
+        if (n.startsWith("ноя")) return Calendar.NOVEMBER;
+        if (n.startsWith("дек")) return Calendar.DECEMBER;
+        return -1;
+    }
+
+    private static int dayOfWeek(String dayName) {
+        String d = dayName.toLowerCase(Locale.US).trim();
+        if (d.startsWith("пон")) return Calendar.MONDAY;
+        if (d.startsWith("вто")) return Calendar.TUESDAY;
+        if (d.startsWith("сре")) return Calendar.WEDNESDAY;
+        if (d.startsWith("чет")) return Calendar.THURSDAY;
+        if (d.startsWith("пят")) return Calendar.FRIDAY;
+        if (d.startsWith("суб")) return Calendar.SATURDAY;
+        if (d.startsWith("вос")) return Calendar.SUNDAY;
+        return -1;
     }
 
     /** "Сегодня: ... верхняя|нижняя неделя" -> parity anchor at today. */
@@ -400,7 +750,7 @@ public final class Smtu {
     // ------------------------------------------------------------------- net
 
     static String httpGet(String url) throws IOException {
-        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection(java.net.Proxy.NO_PROXY);
         c.setConnectTimeout(15000);
         c.setReadTimeout(25000);
         c.setRequestProperty("User-Agent", UA);

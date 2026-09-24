@@ -21,3 +21,6 @@ keystore.properties
 
 # ZCode local state
 .zcode/
+
+# Antigravity local state
+.agents/

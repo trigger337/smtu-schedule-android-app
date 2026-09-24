@@ -682,6 +682,7 @@ public final class MainActivity extends Activity {
         m.append(s.day).append(", ").append(s.time.replace(" - ", " – ")).append('\n')
          .append(s.type);
         if (!s.room.isEmpty()) m.append(" · ").append(s.room);
+        if (!s.group.isEmpty()) m.append('\n').append("Группа: ").append(s.group);
         m.append('\n').append(s.upper ? "Верхняя" : "Нижняя").append(" неделя");
         if (!s.dateRange.isEmpty()) m.append('\n').append('\n').append(s.dateRange);
         if (!s.dates.isEmpty()) {
@@ -771,6 +772,7 @@ public final class MainActivity extends Activity {
             it.append(" · ").append(s.time.replace(" - ", " – "))
               .append(" · ").append(s.subject);
             if (!s.type.isEmpty()) it.append(" (").append(s.type).append(")");
+            if (!s.group.isEmpty()) it.append(" · ").append(s.group);
             if (!s.room.isEmpty()) it.append(" · ").append(s.room);
             items[i] = it.toString();
         }
