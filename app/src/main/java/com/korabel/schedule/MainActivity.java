@@ -494,8 +494,8 @@ public final class MainActivity extends Activity {
         private final OverScroller sc;
         private VelocityTracker vt;
         private float downX, downY, baseOfs;
-        private boolean horiz, settling;
-        private int settleDir, settleLeft; // chained settle: direction and days still to go
+        private boolean horiz, vert, settling;
+        private int settleDir;             // -1 prev day, 0 snap back, +1 next day
         private final int slop;
 
         DayPager(Context c) {
@@ -539,6 +539,7 @@ public final class MainActivity extends Activity {
             downY = e.getY();
             baseOfs = 0;
             horiz = false;
+            vert = false;
             if (vt != null) vt.recycle();
             vt = VelocityTracker.obtain();
             vt.addMovement(e);
@@ -549,23 +550,39 @@ public final class MainActivity extends Activity {
             switch (e.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     trackStart(e);
+                    if (!sc.isFinished()) {          // grab a settle already running
+                        ofs = sc.getCurrX();
+                        sc.abortAnimation();
+                        settling = false;
+                        baseOfs = ofs;
+                        horiz = true;
+                        return true;
+                    }
                     break;
                 case MotionEvent.ACTION_MOVE:
                     if (vt != null) vt.addMovement(e);
-                    if (!horiz) {
+                    if (!horiz && !vert) {
                         float dx = e.getX() - downX, dy = e.getY() - downY;
-                        if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy)) {
-                            if (!sc.isFinished()) {          // grab a settle already running
+                        if (Math.abs(dy) > slop && Math.abs(dy) > Math.abs(dx)) {
+                            vert = true;             // user is scrolling vertically; lock out pager
+                        } else if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy)) {
+                            if (!sc.isFinished()) {
                                 ofs = sc.getCurrX();
                                 sc.abortAnimation();
                                 settling = false;
                             }
                             baseOfs = ofs;
-                            downX = e.getX();               // the drag continues from here
+                            downX = dx > 0 ? downX + slop : downX - slop;
                             horiz = true;
                         }
                     }
                     if (horiz) return true;
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (vt != null) { vt.recycle(); vt = null; }
+                    horiz = false;
+                    vert = false;
                     break;
                 default:
                     if (vt != null) vt.addMovement(e);
@@ -580,6 +597,16 @@ public final class MainActivity extends Activity {
                     return true;
                 case MotionEvent.ACTION_MOVE:
                     if (vt != null) vt.addMovement(e);
+                    if (!horiz && !vert) {
+                        float dx = e.getX() - downX, dy = e.getY() - downY;
+                        if (Math.abs(dy) > slop && Math.abs(dy) > Math.abs(dx)) {
+                            vert = true;
+                        } else if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy)) {
+                            baseOfs = ofs;
+                            downX = dx > 0 ? downX + slop : downX - slop;
+                            horiz = true;
+                        }
+                    }
                     if (horiz) {
                         ofs = Math.max(-w(), Math.min(w(), baseOfs + e.getX() - downX));
                         if (Math.abs(ofs) > slop) {
@@ -602,37 +629,39 @@ public final class MainActivity extends Activity {
             float v = 0;
             if (vt != null) {
                 if (!cancel && horiz) {
-                    vt.computeCurrentVelocity(1000, 15000);
+                    vt.computeCurrentVelocity(1000, 8000);
                     v = vt.getXVelocity();
                 }
                 vt.recycle();
                 vt = null;
             }
-            if (!horiz) return;                             // never dragged: nothing to settle
+            if (!horiz) {
+                vert = false;
+                return;                             // never dragged: nothing to settle
+            }
             horiz = false;
+            vert = false;
             int d = 0;
             if (!cancel) {
-                float proj = ofs + v * 0.22f;               // where the fling meant to land
-                d = Math.max(-3, Math.min(3, Math.round(-proj / w())));
-                if (d != 0 && side != 0 && side != (d > 0 ? 1 : -1)
-                        && Math.abs(ofs) > w() / 10) d = 0; // never teleport a visible page
+                float minFling = 350 * getResources().getDisplayMetrics().density;
+                if (Math.abs(v) > minFling) {
+                    d = v < 0 ? 1 : -1;             // flick left -> next day (+1), flick right -> prev day (-1)
+                } else if (Math.abs(ofs) > w() / 3f) {
+                    d = ofs < 0 ? 1 : -1;           // dragged past 1/3 of the screen width
+                }
+                if (d != 0 && side != 0 && side != d && Math.abs(ofs) > w() / 10) {
+                    d = 0;                          // never teleport a visible page
+                }
             }
             settle(d);
         }
 
         private void settle(int d) {
             settling = true;
-            settleLeft = d;
-            if (d != 0) {
-                settleDir = d > 0 ? 1 : -1;
-                if (side != settleDir) bindAlt(settleDir);
-            }
-            leg();
-        }
-
-        private void leg() {
-            int target = settleLeft == 0 ? 0 : -settleDir * w();
-            sc.startScroll(Math.round(ofs), 0, target - Math.round(ofs), 260);
+            settleDir = d;
+            if (d != 0 && side != d) bindAlt(d);
+            int target = d == 0 ? 0 : -d * w();
+            sc.startScroll(Math.round(ofs), 0, target - Math.round(ofs), 240);
             postInvalidateOnAnimation();
         }
 
@@ -647,8 +676,8 @@ public final class MainActivity extends Activity {
         }
 
         private void legDone() {
-            if (settleLeft == 0) {                           // slid back home
-                settling = false;
+            settling = false;
+            if (settleDir == 0) {                           // slid back home
                 side = 0;
                 ofs = 0;
                 applyOfs();
@@ -659,19 +688,14 @@ public final class MainActivity extends Activity {
             list = alt;
             alt = t;
             stepDay(settleDir);
-            settleLeft -= settleDir;
+            side = 0;
             ofs = 0;
             list.setTranslationX(0);
-            if (settleLeft == 0) {
-                settling = false;
-                side = 0;
+            if (alt != null) {
                 alt.setTranslationX(0);
                 alt.setVisibility(GONE);
-                updateChrome();
-            } else {
-                bindAlt(settleDir);
-                leg();
             }
+            updateChrome();
         }
     }
 
