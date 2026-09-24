@@ -86,7 +86,8 @@ public final class WidgetArt {
             out.add(new Period(Now.startMin(st.current), Now.endMin(st.current), true));
         } else if ((st.kind == Now.BREAK || st.kind == Now.BEFORE) && st.next != null) {
             int ns = Now.startMin(st.next);
-            out.add(new Period(ns - st.gapMin, ns, false));
+            int from = Math.min(st.nowMin, ns - st.gapMin);
+            out.add(new Period(from, ns, false));
         } else {
             return out;                       // AFTER / NONE: the hour is empty
         }
@@ -95,11 +96,18 @@ public final class WidgetArt {
         for (Slot s : st.today) {
             int a = Now.startMin(s), b = Now.endMin(s);
             if (b <= a || a < lastEnd) continue;   // past, ongoing, or overlapping
-            if (a >= end) break;                   // window already full
+            if (a >= end) {
+                if (lastEnd < end) out.add(new Period(lastEnd, end, false));
+                lastEnd = end;
+                break;                   // window already full
+            }
             if (a > lastEnd) out.add(new Period(lastEnd, a, false));
             out.add(new Period(a, Math.min(b, end), true));
             lastEnd = b;
             if (lastEnd >= end) break;
+        }
+        if (lastEnd < end) {
+            out.add(new Period(lastEnd, end, false));
         }
         return out;
     }
@@ -293,7 +301,7 @@ public final class WidgetArt {
             { header = afterHeader(st); headerCol = R.color.w_ring_break; }
         else if (st.kind == Now.NONE)
             { header = st.gid == null ? "НЕТ ГРУППЫ" : "ПАР НЕТ"; headerCol = R.color.w_sub; }
-        else { header = "ДАЛЕЕ"; headerCol = R.color.w_ring_lesson; }
+        else { header = "ДАЛЕЕ"; headerCol = R.color.w_ring_break; }
 
         TextPaint hdr = text(10 * sd, true, ctx.getColor(headerCol));
         TextPaint big = text(14 * sd, true, ctx.getColor(R.color.w_text));
