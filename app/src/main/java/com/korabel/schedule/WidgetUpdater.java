@@ -74,7 +74,7 @@ public final class WidgetUpdater {
             case Now.BREAK:
             case Now.BEFORE:
                 tick = st.remainMin <= 90 ? now + 60000L
-                        : now + (long) st.remainMin * 60000L;
+                        : now + (long) (st.remainMin - 90) * 60000L;
                 break;
             case Now.AFTER:
                 tick = st.nextDay.getTimeInMillis() + (long) Now.startMin(st.next) * 60000L;
