@@ -105,8 +105,7 @@ public final class Now {
 
     /**
      * Backdrop of one slot on its own day: the colored band is the time
-     * left — full for future lessons, draining while the lesson runs or
-     * while the break before the first upcoming lesson runs (both blue),
+     * left — full for future lessons, draining while the lesson runs (blue),
      * gone (all gray) once it is over. slots is the day's slots sorted by
      * start; idx picks one. A day entirely past is all gray, entirely
      * future all colored.
@@ -122,12 +121,6 @@ public final class Now {
         int nm = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
         if (nm >= b) return new Band(R.color.fill_past, 0f);
         if (nm >= a) return new Band(R.color.fill_now, (b - nm) / (float) (b - a));
-        int gapStart = 8 * 60;                       // the day starts around 08:00, as compute() assumes
-        for (int j = 0; j < idx; j++)                // parallel slots share a start; the break lies before that block
-            if (startMin(slots.get(j)) < a)
-                gapStart = Math.max(gapStart, endMin(slots.get(j)));
-        if (nm >= gapStart && a > gapStart)
-            return new Band(R.color.fill_now, (a - nm) / (float) (a - gapStart));
         return new Band(typeFillRes(s.type), 1f);
     }
 
@@ -159,13 +152,18 @@ public final class Now {
             if (a >= 0 && a > st.nowMin) {
                 st.next = s;
                 st.remainMin = a - st.nowMin;
-                int prevEnd = 8 * 60;                  // assume the day starts around 08:00
+                int prevEnd = -1;
                 for (Slot p : st.today) {
                     int b = endMin(p);
                     if (b >= 0 && b <= st.nowMin && b > prevEnd) prevEnd = b;
                 }
-                st.gapMin = Math.max(1, a - prevEnd);
-                st.kind = prevEnd > 8 * 60 ? BREAK : BEFORE;
+                if (prevEnd >= 0) {
+                    st.kind = BREAK;
+                    st.gapMin = Math.max(1, a - prevEnd);
+                } else {
+                    st.kind = BEFORE;
+                    st.gapMin = 90;
+                }
                 return st;
             }
         }
