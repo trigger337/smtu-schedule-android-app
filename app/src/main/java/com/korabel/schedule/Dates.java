@@ -30,6 +30,10 @@ final class Dates {
     /** Monday 00:00 of the week containing c. */
     static Calendar monday(Calendar c) {
         Calendar r = (Calendar) c.clone();
+        r.set(Calendar.HOUR_OF_DAY, 0);
+        r.set(Calendar.MINUTE, 0);
+        r.set(Calendar.SECOND, 0);
+        r.set(Calendar.MILLISECOND, 0);
         int shift = (r.get(Calendar.DAY_OF_WEEK) + 5) % 7; // Mon=0 .. Sun=6
         r.add(Calendar.DAY_OF_YEAR, -shift);
         return r;

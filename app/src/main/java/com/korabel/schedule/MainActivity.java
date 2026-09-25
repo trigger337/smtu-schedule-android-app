@@ -198,6 +198,10 @@ public final class MainActivity extends Activity {
         tvWeek.setTextSize(12);
         tvWeek.setTypeface(Typeface.DEFAULT_BOLD);
         tvWeek.setPadding(dp(12), dp(4), dp(12), dp(4));
+        tvWeek.setOnClickListener(v -> {
+            anchor.add(Calendar.DAY_OF_YEAR, 7);
+            render();
+        });
         LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-2, -2);
         wp.leftMargin = dp(8);
         row2.addView(tvWeek, wp);

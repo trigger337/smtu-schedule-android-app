@@ -169,8 +169,14 @@ public final class Smtu {
             anchor = c.getTimeInMillis();
             anchorUpper = true;
         }
-        long weeks = ((date.getTimeInMillis() - anchor) / (7L * 86400000L)) % 2;
-        return (weeks == 0) == anchorUpper;
+        Calendar aCal = Calendar.getInstance();
+        aCal.setTimeInMillis(anchor);
+        Calendar aMon = Dates.monday(aCal);
+        Calendar dMon = Dates.monday(date != null ? date : Dates.today());
+        long diff = dMon.getTimeInMillis() - aMon.getTimeInMillis();
+        long weeks = Math.round((double) diff / (7.0 * 86400000.0));
+        long mod = ((weeks % 2) + 2) % 2;
+        return (mod == 0) == anchorUpper;
     }
 
     // ----------------------------------------------------------------- parsing
@@ -595,15 +601,13 @@ public final class Smtu {
         return -1;
     }
 
-    /** "Сегодня: ... верхняя|нижняя неделя" -> parity anchor at today. */
+    /** "Сегодня: ... верхняя|нижняя неделя" -> parity anchor at today's Monday. */
     static void calibrateParity(Context ctx, String page) {
         Matcher m = Pattern.compile("Сегодня:[^<]*?(верхняя|нижняя)\\s+недел").matcher(page);
         if (!m.find()) return;
-        Calendar today = Calendar.getInstance();
-        today.set(Calendar.HOUR_OF_DAY, 0); today.set(Calendar.MINUTE, 0);
-        today.set(Calendar.SECOND, 0); today.set(Calendar.MILLISECOND, 0);
+        Calendar mon = Dates.monday(Dates.today());
         ctx.getSharedPreferences("sched", Context.MODE_PRIVATE).edit()
-           .putLong("parityAnchor", today.getTimeInMillis())
+           .putLong("parityAnchor", mon.getTimeInMillis())
            .putBoolean("parityAnchorUpper", m.group(1).equals("верхняя"))
            .apply();
     }
