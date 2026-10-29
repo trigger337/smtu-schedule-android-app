@@ -138,12 +138,49 @@ public final class Smtu {
                 String path = teacher ? "/ru/viewschedule_new/teacher/" : "/ru/viewschedule_new/";
                 String html = httpGet(HOST + path + id + "/");
                 calibrateParity(ctx, html);
-                post(mergeAndStore(ctx, teacher, id, parseSchedule(html, ctx)), null, cb);
+                List<Slot> fresh = parseSchedule(html, ctx);
+                List<Slot> stored = mergeAndStore(ctx, teacher, id, fresh);
+                if (ctx != null) {
+                    ctx.getSharedPreferences("sched", Context.MODE_PRIVATE).edit()
+                       .putLong("lastSuccess_" + (teacher ? "t_" : "g_") + id, System.currentTimeMillis())
+                       .remove("lastError_" + (teacher ? "t_" : "g_") + id)
+                       .apply();
+                }
+                post(stored, null, cb);
             } catch (Exception e) {
+                if (ctx != null) {
+                    ctx.getSharedPreferences("sched", Context.MODE_PRIVATE).edit()
+                       .putLong("lastError_" + (teacher ? "t_" : "g_") + id, System.currentTimeMillis())
+                       .putString("lastErrorMsg_" + (teacher ? "t_" : "g_") + id, e.getMessage())
+                       .apply();
+                }
                 List<Slot> cached = readSlotCache(ctx, teacher, id);
                 post(cached, cached.isEmpty() ? "Нет сети: " + e.getMessage() : null, cb);
             }
         }).start();
+    }
+
+    /**
+     * Checks if schedule update failed and the last successful sync is more than 24 hours old.
+     */
+    public static boolean isScheduleStale(Context ctx, boolean teacher, String id) {
+        if (ctx == null || id == null || id.isEmpty()) return false;
+        SharedPreferences p = ctx.getSharedPreferences("sched", Context.MODE_PRIVATE);
+        String key = (teacher ? "t_" : "g_") + id;
+        long lastErr = p.getLong("lastError_" + key, 0);
+        if (lastErr == 0) return false;
+        long lastOk = p.getLong("lastSuccess_" + key, 0);
+        if (lastOk == 0) {
+            File f = schedFile(ctx, teacher, id);
+            if (f.exists()) lastOk = f.lastModified();
+        }
+        long now = System.currentTimeMillis();
+        return lastOk == 0 || (now - lastOk) > 24L * 3600000L;
+    }
+
+    public static String getScheduleUrl(boolean teacher, String id) {
+        String path = teacher ? "/ru/viewschedule_new/teacher/" : "/ru/viewschedule_new/";
+        return HOST + path + (id != null ? id + "/" : "");
     }
 
     /** Synchronous cache read for instant restore. */

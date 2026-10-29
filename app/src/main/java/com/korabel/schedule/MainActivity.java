@@ -68,6 +68,7 @@ public final class MainActivity extends Activity {
     private ListView list;                 // primary page; the pager swaps in the alt one
     private DayPager pager;
     private Button btnMode;
+    private Button btnWarn;
 
     // the backdrop band moves once a minute — re-draw visible rows in place
     private final Handler ticker = new Handler();
@@ -218,6 +219,18 @@ public final class MainActivity extends Activity {
         View gap = new View(this);
         row2.addView(gap, new LinearLayout.LayoutParams(0, 1, 1f));
 
+        btnWarn = new Button(this);
+        btnWarn.setText("⚠");
+        btnWarn.setTextSize(16);
+        btnWarn.setTextColor(Color.WHITE);
+        btnWarn.setBackgroundColor(getColor(R.color.warn_red));
+        btnWarn.setPadding(0, 0, 0, 0);
+        btnWarn.setVisibility(View.GONE);
+        btnWarn.setOnClickListener(v -> showSyncWarning());
+        LinearLayout.LayoutParams warnLp = new LinearLayout.LayoutParams(dp(36), dp(36));
+        warnLp.rightMargin = dp(8);
+        row2.addView(btnWarn, warnLp);
+
         Button info = new Button(this);
         info.setText("ⓘ");
         info.setTextSize(16);
@@ -304,6 +317,9 @@ public final class MainActivity extends Activity {
         tvWeek.setText(upper ? "ВЕРХНЯЯ НЕДЕЛЯ" : "НИЖНЯЯ НЕДЕЛЯ");
         tvWeek.setBackgroundColor(upper ? getColor(R.color.week_upper) : getColor(R.color.week_lower));
         tvWeek.setTextColor(Color.WHITE);
+
+        boolean stale = Smtu.isScheduleStale(this, false, groupId);
+        btnWarn.setVisibility(stale ? View.VISIBLE : View.GONE);
     }
 
     private String rangeText() {
@@ -926,6 +942,43 @@ public final class MainActivity extends Activity {
             b.setPositiveButton("Закрыть", null);
         }
         b.setNeutralButton("Проверить", (d, w) -> UpdateChecker.checkNow(this));
+        AlertDialog dlg = b.show();
+        TextView body = dlg.findViewById(android.R.id.message);
+        if (body != null) body.setMovementMethod(LinkMovementMethod.getInstance());
+    }
+
+    private void showSyncWarning() {
+        final String url = Smtu.getScheduleUrl(false, groupId);
+        String text = "Расписание не удается обновить более суток из-за проблем с сетью или блокировки подключения.\n\n"
+                + "Отображаются сохраненные ранее данные, которые могут быть неактуальны.\n\n"
+                + "Актуальное расписание на сайте университета:\n"
+                + url;
+        SpannableString msg = new SpannableString(text);
+        int ls = text.indexOf(url);
+        if (ls >= 0) {
+            msg.setSpan(new ClickableSpan() {
+                @Override public void onClick(View widget) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                    } catch (Exception e) {
+                        toast("Браузер не найден");
+                    }
+                }
+            }, ls, ls + url.length(), 0);
+        }
+
+        AlertDialog.Builder b = new AlertDialog.Builder(this)
+                .setTitle("Расписание устарело")
+                .setMessage(msg)
+                .setPositiveButton("Открыть сайт", (d, w) -> {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                    } catch (Exception e) {
+                        toast("Браузер не найден");
+                    }
+                })
+                .setNegativeButton("Закрыть", null);
+
         AlertDialog dlg = b.show();
         TextView body = dlg.findViewById(android.R.id.message);
         if (body != null) body.setMovementMethod(LinkMovementMethod.getInstance());

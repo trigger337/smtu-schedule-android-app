@@ -14,6 +14,7 @@
     <color name="day_sel">#9FA8DA</color>
     <color name="chip_sel">#2C3550</color>
     <color name="today_bg">#232B45</color>
+    <color name="warn_red">#EF5350</color>
 
     <color name="fill_lecture">#38EF9A9A</color>
     <color name="fill_practice">#38FFB74D</color>
