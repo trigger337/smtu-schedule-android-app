@@ -42,20 +42,6 @@
                 android:resource="@xml/name_widget_info" />
         </receiver>
 
-        <!-- Disabled while the agenda panel design settles; the provider and
-             layouts stay in the tree — flip enabled back to re-publish. -->
-        <receiver
-            android:name=".AgendaWidgetProvider"
-            android:enabled="false"
-            android:exported="false"
-            android:label="Расписание на день">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/agenda_widget_info" />
-        </receiver>
 
         <receiver android:name=".WidgetAlarmReceiver" android:exported="false" />
 

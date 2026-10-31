@@ -47,15 +47,33 @@
         android:ellipsize="end"
         android:textColor="@color/w_text" />
 
-    <TextView
-        android:id="@+id/wn_teacher"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="1dp"
-        android:textSize="8sp"
-        android:maxLines="1"
-        android:ellipsize="end"
-        android:textColor="@color/w_sub" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/wn_teacher"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="8sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/w_sub" />
+
+        <TextView
+            android:id="@+id/wn_room"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:textSize="8sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/w_sub" />
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"

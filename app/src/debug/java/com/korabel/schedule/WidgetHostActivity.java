@@ -33,7 +33,6 @@ public final class WidgetHostActivity extends Activity {
         final int which = getIntent().getIntExtra("widget", 0);
         ComponentName provider = new ComponentName(this,
                 which == 1 ? NameWidgetProvider.class
-                : which == 2 ? AgendaWidgetProvider.class
                 : TimerWidgetProvider.class);
         int[] existing = host.getAppWidgetIds();
         int id = -1;
@@ -62,8 +61,8 @@ public final class WidgetHostActivity extends Activity {
     }
 
     private void show(int id, int which) {
-        int w = which == 1 ? 210 : which == 2 ? 280 : 70;   // dp, ~one cell = 70
-        int h = which == 0 ? 70 : (which == 1 ? 70 : 140);
+        int w = which == 1 ? 210 : 70;   // dp, ~one cell = 70
+        int h = which == 0 ? 70 : 70;
         if (getIntent().getIntExtra("orient", 0) == 1) {
             int t = w; w = h; h = t;
             if (which == 1) { w = 40; h = 180; }           // name vertical = 1x3
@@ -80,7 +79,6 @@ public final class WidgetHostActivity extends Activity {
         // updates that arrive while they are already on screen.
         awm.updateAppWidget(id,
                 which == 1 ? NameWidgetProvider.render(this, awm, id)
-                : which == 2 ? AgendaWidgetProvider.render(this, awm, id)
                 : TimerWidgetProvider.render(this));
 
         AppWidgetProviderInfo info = awm.getAppWidgetInfo(id);

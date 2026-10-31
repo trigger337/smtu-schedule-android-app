@@ -9,13 +9,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
-import android.text.Layout;
-import android.text.SpannableStringBuilder;
-import android.text.StaticLayout;
 import android.text.TextPaint;
-import android.text.TextUtils;
-import android.text.style.ForegroundColorSpan;
-import android.text.style.RelativeSizeSpan;
 
 import com.korabel.schedule.Smtu.Slot;
 
@@ -23,11 +17,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Canvas-drawn widget pieces: the 60-minute timeline bar, the bitmap ring
- * (agenda tile) and the adaptive agenda text panel. RemoteViews XML cannot
- * draw dynamic segments or measure text, so these are rendered to bitmaps
- * and pushed through setImageViewBitmap. Colors are resolved at draw time,
- * so a theme flip leaves them stale until the next tick (documented caveat).
+ * Canvas-drawn widget pieces: the 60-minute timeline bar and vertical text
+ * rendering for the name widget. RemoteViews XML cannot draw dynamic segments
+ * or measure text, so these are rendered to bitmaps and pushed through
+ * setImageViewBitmap.
  */
 public final class WidgetArt {
 
@@ -230,171 +223,6 @@ public final class WidgetArt {
         return new String[]{"—", st.gid == null ? "нет группы" : "нет пар"};
     }
 
-    /**
-     * The agenda's graphic tile: the hour timeline blown up to fill the whole
-     * 2x2 area with just the countdown text inside, on a card-colored badge
-     * so the minutes stay readable over the cells.
-     */
-    public static Bitmap barTile(Context ctx, Now.State st, int w, int h, boolean vertical) {
-        if (w <= 0 || h <= 0) return null;
-        float d = ctx.getResources().getDisplayMetrics().density;
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(bmp);
-
-        Bitmap t = timelineH(ctx, st, vertical ? h : w, vertical ? w : h, 20);
-        if (vertical) {                       // marker -> bottom, future -> up
-            Matrix m = new Matrix();
-            m.postRotate(-90);
-            m.postTranslate(0, h);
-            c.drawBitmap(t, m, null);
-        } else {
-            c.drawBitmap(t, 0, 0, null);
-        }
-        t.recycle();
-
-        float size = Math.min(w, h) * 0.64f;
-        float left = (w - size) / 2f, top = (h - size) / 2f;
-        Paint badge = new Paint(Paint.ANTI_ALIAS_FLAG);
-        badge.setColor(ctx.getColor(R.color.w_bg));
-        c.drawCircle(w / 2f, h / 2f, size / 2f + 4 * d, badge);
-        drawCenterText(c, ctx, ringText(st), left, top, size);
-        return bmp;
-    }
-
-    /** {main, sub} centered in a size×size box at (left, top); main auto-shrinks. */
-    private static void drawCenterText(Canvas c, Context ctx, String[] txt,
-                                       float left, float top, float size) {
-        TextPaint main = text(size * 0.24f, true, ctx.getColor(R.color.w_text));
-        while (main.measureText(txt[0]) > size * 0.92 && main.getTextSize() > 6) {
-            main.setTextSize(main.getTextSize() * 0.9f);
-        }
-        TextPaint sub = text(Math.max(7f, size * 0.11f), false, ctx.getColor(R.color.w_sub));
-        float hM = textH(main), hS = textH(sub);
-        float y = top + size / 2f - (hM + hS) / 2f;
-        c.drawText(txt[0], left + (size - main.measureText(txt[0])) / 2f, y - main.ascent(), main);
-        y += hM;
-        c.drawText(txt[1], left + (size - sub.measureText(txt[1])) / 2f, y - sub.ascent(), sub);
-    }
-
-    // ---------------------------------------------------------------- agenda panel
-
-    /**
-     * The big widget's text panel: optional «Сейчас» block, then upcoming
-     * rows. Row count adapts to height; leftover space wraps earlier rows'
-     * subjects to a second line first (top-down priority); rows beyond
-     * capacity are dropped, so the nearest lessons always win.
-     */
-    public static Bitmap agendaPanel(Context ctx, Now.State st, List<Slot> upcoming,
-                                     int w, int h) {
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(bmp);
-        float d = ctx.getResources().getDisplayMetrics().density;
-        float sd = ctx.getResources().getDisplayMetrics().scaledDensity;
-        int pad = Math.round(6 * d);
-        int W = w - 2 * pad;
-        if (W <= 0) return bmp;
-
-        String header;
-        int headerCol;
-        if (st.kind == Now.ONGOING) { header = "СЕЙЧАС"; headerCol = R.color.w_ring_lesson; }
-        else if (st.kind == Now.AFTER)
-            { header = afterHeader(st); headerCol = R.color.w_ring_break; }
-        else if (st.kind == Now.NONE)
-            { header = st.gid == null ? "НЕТ ГРУППЫ" : "ПАР НЕТ"; headerCol = R.color.w_sub; }
-        else { header = "ДАЛЕЕ"; headerCol = R.color.w_ring_break; }
-
-        TextPaint hdr = text(10 * sd, true, ctx.getColor(headerCol));
-        TextPaint big = text(14 * sd, true, ctx.getColor(R.color.w_text));
-        TextPaint meta = text(10 * sd, false, ctx.getColor(R.color.w_sub));
-        TextPaint note = text(11 * sd, false, ctx.getColor(R.color.w_sub));
-        TextPaint rowT = text(10 * sd, true, ctx.getColor(R.color.w_ring_lesson));
-        TextPaint rowS = text(11 * sd, false, ctx.getColor(R.color.w_text));
-        TextPaint rowR = text(10 * sd, false, ctx.getColor(R.color.w_sub));
-
-        float y = pad;
-        c.drawText(header, pad, y - hdr.ascent(), hdr);
-        y += textH(hdr) + 3 * d;
-
-        if (st.kind == Now.NONE) {
-            if (st.gid == null)
-                drawLayout(c, layout("Выберите группу в приложении", note, W, 1), pad, y);
-            return bmp;
-        }
-
-        if (st.kind == Now.ONGOING) {
-            StaticLayout subj = layout(withTeacher(ctx, st.current), big, W, 2);
-            if (y + subj.getHeight() + textH(meta) + 10 * d <= h - pad) {
-                drawLayout(c, subj, pad, y);
-                y += subj.getHeight() + 2 * d;
-                String m = Now.compactTime(st.current.time) + " · " + Now.roomFirst(st.current.room);
-                drawLayout(c, layout(m, meta, W, 1), pad, y);
-                y += textH(meta) + 4 * d;
-                Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG);
-                bar.setColor(ctx.getColor(R.color.w_ring_track));
-                RectF tr = new RectF(pad, y, w - pad, y + 2 * d);
-                c.drawRoundRect(tr, d, d, bar);
-                bar.setColor(ctx.getColor(R.color.w_ring_lesson));
-                float fill = (w - 2f * pad) * ringPct(st) / 100f;
-                if (fill > 2 * d) {
-                    RectF fr = new RectF(pad, y, pad + fill, y + 2 * d);
-                    c.drawRoundRect(fr, d, d, bar);
-                }
-                y += 2 * d + 6 * d;
-                TextPaint nh = text(9 * sd, true, ctx.getColor(R.color.w_sub));
-                c.drawText("ДАЛЕЕ", pad, y - nh.ascent(), nh);
-                y += textH(nh) + 3 * d;
-            }
-        }
-
-        float rowH = Math.max(Math.max(textH(rowT), textH(rowS)), textH(rowR)) + 3 * d;
-        float avail = h - pad - y;
-        int n = Math.min((int) (avail / rowH), upcoming.size());
-        if (n <= 0) return bmp;
-
-        float timeW = 0, roomW = 0;
-        for (int i = 0; i < n; i++) {
-            timeW = Math.max(timeW, rowT.measureText(time5(upcoming.get(i))));
-            roomW = Math.max(roomW, rowR.measureText(Now.roomFirst(upcoming.get(i).room)));
-        }
-        float subjW = W - timeW - roomW - 2 * 5 * d;
-        if (subjW < 20 * d) { roomW = 0; subjW = W - timeW - 5 * d; }   // too narrow: drop rooms
-
-        // leftover height wraps earlier rows' subjects first, top-down; a row
-        // can reach three lines, but only after every row above got its extras
-        float lineH = textH(rowS) * 1.15f;
-        int extra = (int) ((avail - n * rowH) / lineH);
-        int[] lines = new int[n];
-        java.util.Arrays.fill(lines, 1);            // base: one line per row
-        for (int i = 0; extra > 0 && i < 3 * n; i++)
-            if (lines[i % n] < 3) { lines[i % n]++; extra--; }
-
-        for (int i = 0; i < n; i++) {
-            Slot s = upcoming.get(i);
-            c.drawText(time5(s), pad, y - rowT.ascent(), rowT);
-            if (roomW > 0) {
-                String room = Now.roomFirst(s.room);
-                c.drawText(room, w - pad - rowR.measureText(room), y - rowR.ascent(), rowR);
-            }
-            StaticLayout sl = layout(withTeacher(ctx, s), rowS, Math.round(subjW), lines[i]);
-            drawLayout(c, sl, pad + timeW + 5 * d, y);
-            y += rowH + (lines[i] - 1) * lineH;
-        }
-        return bmp;
-    }
-
-    /** "Subject ◦ Teacher" — the tail dimmer and slightly smaller; plain
-     *  subject when there is no teacher. Wrapping naturally pushes the
-     *  teacher to the end of whatever line the subject stops on. */
-    private static CharSequence withTeacher(Context ctx, Slot s) {
-        if (s.teacher.isEmpty()) return s.subject;
-        SpannableStringBuilder sb = new SpannableStringBuilder(s.subject);
-        int at = sb.length();
-        sb.append(" \u25E6 ").append(s.teacher);      // ◦ white bullet
-        sb.setSpan(new ForegroundColorSpan(ctx.getColor(R.color.w_sub)), at, sb.length(), 0);
-        sb.setSpan(new RelativeSizeSpan(0.9f), at, sb.length(), 0);
-        return sb;
-    }
-
     // ---------------------------------------------------------------- vertical text
 
     /** One vertical line: text, its size in sp, boldness, color, column cap. */
@@ -503,15 +331,6 @@ public final class WidgetArt {
         c.drawText(s, x, y, p);
     }
 
-    private static String afterHeader(Now.State st) {
-        return Now.isTomorrow(st) ? "ЗАВТРА"
-                : Now.weekdayName(st.nextDay).toUpperCase(new java.util.Locale("ru"));
-    }
-
-    private static String time5(Slot s) {
-        return s.time.length() >= 5 ? s.time.substring(0, 5) : s.time;
-    }
-
     // ---------------------------------------------------------------- helpers
 
     private static TextPaint text(float size, boolean bold, int color) {
@@ -524,22 +343,6 @@ public final class WidgetArt {
 
     private static float textH(TextPaint p) {
         return -p.ascent() + p.descent();
-    }
-
-    private static StaticLayout layout(CharSequence s, TextPaint p, int w, int maxLines) {
-        return StaticLayout.Builder.obtain(s, 0, s.length(), p, Math.max(1, w))
-                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                .setLineSpacing(0, 1f)
-                .setEllipsize(TextUtils.TruncateAt.END)
-                .setMaxLines(maxLines)
-                .build();
-    }
-
-    private static void drawLayout(Canvas c, StaticLayout l, float x, float y) {
-        c.save();
-        c.translate(x, y);
-        l.draw(c);
-        c.restore();
     }
 
     private static int pct(int part, int whole) {

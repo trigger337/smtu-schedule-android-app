@@ -62,13 +62,13 @@ public final class NameWidgetProvider extends AppWidgetProvider {
                 case Now.BEFORE:
                     shown = st.next;
                     label = "Следующая пара";
-                    extra = st.remainMin <= 90 ? inMin(st.remainMin) : audOf(st.next);
+                    extra = inMin(st.remainMin);
                     accent = R.color.w_ring_break;
                     break;
                 default:                              // AFTER
                     shown = st.next;
                     label = Now.isTomorrow(st) ? "Завтра" : Now.weekdayName(st.nextDay);
-                    extra = audOf(st.next);
+                    extra = "";
                     accent = R.color.w_ring_break;
                     break;
             }
@@ -82,8 +82,11 @@ public final class NameWidgetProvider extends AppWidgetProvider {
             rv.setTextViewText(R.id.wn_time, shown == null ? "" : Now.compactTime(shown.time));
             String teacher = shown == null ? "" : shown.teacher;
             rv.setTextViewText(R.id.wn_teacher, teacher);
+            String room = shown == null ? "" : audOf(shown);
+            rv.setTextViewText(R.id.wn_room, room);
+            rv.setViewVisibility(R.id.wn_room, room.isEmpty() ? View.GONE : View.VISIBLE);
             rv.setViewVisibility(R.id.wn_teacher,
-                    teacher.isEmpty() ? View.GONE : View.VISIBLE);
+                    teacher.isEmpty() && room.isEmpty() ? View.GONE : View.VISIBLE);
             rv.setTextViewText(R.id.wn_extra, extra);
             rv.setTextColor(R.id.wn_extra,
                     app.getColor(st.kind == Now.AFTER ? R.color.w_sub : accent));
@@ -101,12 +104,15 @@ public final class NameWidgetProvider extends AppWidgetProvider {
                 lines.add(new WidgetArt.VLine(shown.subject, 11, true, R.color.w_text, 2));
                 if (!shown.teacher.isEmpty())
                     lines.add(new WidgetArt.VLine(shown.teacher, 8, false, R.color.w_sub, 2));
+                String room = audOf(shown);
                 String meta = label + " \u00B7 " + Now.compactTime(shown.time)
+                        + (room.isEmpty() ? "" : " \u00B7 " + room)
                         + (extra.isEmpty() ? "" : " \u00B7 " + extra);
                 lines.add(new WidgetArt.VLine(meta, 8, false, R.color.w_sub, 2));
                 rv.setContentDescription(R.id.wn_text,
                         label + ": " + shown.subject
-                        + (shown.teacher.isEmpty() ? "" : ", " + shown.teacher));
+                        + (shown.teacher.isEmpty() ? "" : ", " + shown.teacher)
+                        + (room.isEmpty() ? "" : ", " + room));
             }
             int textW = Math.round((WidgetArt.widthDp(o, 40) - 12) * d);
             int textH = Math.round((WidgetArt.heightDp(o, 180) - 27) * d);
@@ -128,9 +134,12 @@ public final class NameWidgetProvider extends AppWidgetProvider {
         return "через " + m + " мин";
     }
 
-    /** "ауд. 509"; empty when the slot has no room. */
+    /** "ауд. 509" / "ауд. 167 (У)"; empty when the slot has no room. */
     private static String audOf(Slot s) {
+        if (s == null) return "";
         String r = Now.roomFirst(s.room);
-        return r.isEmpty() ? "" : "ауд. " + r;
+        if (r.isEmpty()) return "";
+        Maps.Building b = Maps.ofRoom(s.room);
+        return "ауд. " + r + (b != null ? " (" + b.letter + ")" : "");
     }
 }

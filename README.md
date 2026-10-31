@@ -144,7 +144,7 @@ only, no downloads.
         WidgetUpdater.java      рендер всех виджетов + самопланируемые будильники
         WidgetAlarmReceiver.java будильник виджетов — перезапуск рендера
         WidgetClickReceiver.java тап = обновление, двойной тап = открыть приложение
-        TimerWidgetProvider.java / NameWidgetProvider.java / AgendaWidgetProvider.java
+        TimerWidgetProvider.java / NameWidgetProvider.java
         SystemReceiver.java     BOOT/TIME_SET/TIMEZONE/… — перезапуск будильников
         UpdateChecker.java      проверка релизов GitLab
         Maps.java               таблица корпусов → ссылки на официальные планы (isu.smtu.ru)
@@ -319,7 +319,7 @@ in the ⓘ dialog. No auto-installs.
         WidgetUpdater.java      renders all widgets + self-rescheduling alarms
         WidgetAlarmReceiver.java the widget tick alarm — re-runs the renderer
         WidgetClickReceiver.java tap = refresh, double tap = open the app
-        TimerWidgetProvider.java / NameWidgetProvider.java / AgendaWidgetProvider.java
+        TimerWidgetProvider.java / NameWidgetProvider.java
         SystemReceiver.java     BOOT/TIME_SET/TIMEZONE/… — restart the alarms
         UpdateChecker.java      GitLab release check
         Maps.java               building table -> links to the official plans (isu.smtu.ru)
