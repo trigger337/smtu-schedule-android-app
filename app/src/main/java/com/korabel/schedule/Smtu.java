@@ -757,6 +757,49 @@ public final class Smtu {
                     f.delete();
     }
 
+    /** Stored recent groups (up to 5), newest first. */
+    public static List<Group> recentGroups(Context ctx) {
+        String v = ctx.getSharedPreferences("sched", Context.MODE_PRIVATE).getString("recentGroups", "");
+        List<Group> out = new ArrayList<>();
+        if (!v.isEmpty()) {
+            for (String pair : v.split(";")) {
+                int c = pair.indexOf(':');
+                if (c > 0) out.add(new Group(pair.substring(0, c), pair.substring(c + 1)));
+            }
+        }
+        if (out.isEmpty()) {
+            // fallback to legacy PREF_RECENT with cached group names
+            List<String> ids = recents(ctx);
+            List<Group> all = readGroupsCache(ctx);
+            Map<String, String> nameMap = new java.util.HashMap<>();
+            for (Group g : all) nameMap.put(g.id, g.name);
+            for (String id : ids) {
+                String name = nameMap.get(id);
+                out.add(new Group(id, name != null ? name : id));
+            }
+        }
+        return out;
+    }
+
+    /** Make id and name the most recent group and update recent groups list. */
+    static void touchRecent(Context ctx, String id, String name) {
+        touchRecent(ctx, id);
+        if (name == null || name.isEmpty()) return;
+        List<Group> groups = recentGroups(ctx);
+        for (int i = 0; i < groups.size(); i++) {
+            if (groups.get(i).id.equals(id)) { groups.remove(i); break; }
+        }
+        groups.add(0, new Group(id, name));
+        while (groups.size() > 5) groups.remove(5);
+        StringBuilder sb = new StringBuilder();
+        for (Group g : groups) {
+            if (sb.length() > 0) sb.append(';');
+            sb.append(g.id).append(':').append(g.name);
+        }
+        ctx.getSharedPreferences("sched", Context.MODE_PRIVATE).edit()
+           .putString("recentGroups", sb.toString()).apply();
+    }
+
     /** Copy with the original timestamp: a mirror must look exactly as old. */
     private static void mirror(File src, File dst) {
         try {

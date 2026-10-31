@@ -866,14 +866,49 @@ public final class MainActivity extends Activity {
         int pad = dp(16);
         box.setPadding(pad, pad, pad, 0);
 
+        List<Group> recents = Smtu.recentGroups(this);
+        final AlertDialog[] dlgRef = new AlertDialog[1];
+
+        if (!recents.isEmpty()) {
+            TextView recTitle = new TextView(this);
+            recTitle.setText("Недавние группы:");
+            recTitle.setTextSize(12);
+            recTitle.setTextColor(getColor(R.color.text_meta));
+            box.addView(recTitle, new LinearLayout.LayoutParams(-1, -2));
+
+            android.widget.HorizontalScrollView hsv = new android.widget.HorizontalScrollView(this);
+            hsv.setHorizontalScrollBarEnabled(false);
+            LinearLayout recRow = new LinearLayout(this);
+            recRow.setOrientation(LinearLayout.HORIZONTAL);
+            for (final Group g : recents) {
+                Button chip = new Button(this);
+                chip.setText(g.name);
+                chip.setTextSize(12);
+                chip.setAllCaps(false);
+                chip.setPadding(dp(10), dp(4), dp(10), dp(4));
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(36));
+                lp.rightMargin = dp(6);
+                chip.setOnClickListener(v -> {
+                    if (dlgRef[0] != null) dlgRef[0].dismiss();
+                    selectGroup(g);
+                });
+                recRow.addView(chip, lp);
+            }
+            hsv.addView(recRow, new FrameLayout.LayoutParams(-2, -2));
+            LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(-1, -2);
+            hlp.topMargin = dp(4);
+            hlp.bottomMargin = dp(8);
+            box.addView(hsv, hlp);
+        }
+
         EditText search = new EditText(this);
-        search.setHint("Группа, например 12826-61");
+        search.setHint("Поиск группы, например 12826-61");
         box.addView(search, new LinearLayout.LayoutParams(-1, -2));
 
         final List<Group> all = new ArrayList<>();
         final List<Group> filtered = new ArrayList<>();
         ListView lv = new ListView(this);
-        box.addView(lv, new LinearLayout.LayoutParams(-1, dp(320)));
+        box.addView(lv, new LinearLayout.LayoutParams(-1, dp(280)));
 
         final android.widget.ArrayAdapter<String> adapter =
                 new android.widget.ArrayAdapter<>(this, android.R.layout.simple_list_item_1, new ArrayList<>());
@@ -887,7 +922,7 @@ public final class MainActivity extends Activity {
             }
         });
 
-        final AlertDialog dlg = new AlertDialog.Builder(this)
+        dlgRef[0] = new AlertDialog.Builder(this)
                 .setTitle("Ваша группа")
                 .setView(box)
                 .setNegativeButton("Отмена", null)
@@ -895,18 +930,11 @@ public final class MainActivity extends Activity {
 
         lv.setOnItemClickListener((parent, view, pos, id) -> {
             Group picked = filtered.get(pos);
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                .putString(PREF_GID, picked.id).putString(PREF_GNAME, picked.name).apply();
-            Smtu.touchRecent(this, picked.id);
-            groupId = picked.id;
-            groupName = picked.name;
-            anchor = Dates.monday(Dates.today());
-            dayOffset = (Dates.today().get(Calendar.DAY_OF_WEEK) + 5) % 7;
-            dlg.dismiss();
-            load();
+            dlgRef[0].dismiss();
+            selectGroup(picked);
         });
 
-        dlg.show();
+        dlgRef[0].show();
 
         Smtu.groups(this, (groups, error) -> {
             if (groups.isEmpty()) { toast(error != null ? error : "Список групп недоступен"); return; }
@@ -914,6 +942,17 @@ public final class MainActivity extends Activity {
             all.addAll(groups);
             applyFilter(search.getText().toString(), all, filtered, adapter);
         });
+    }
+
+    private void selectGroup(Group picked) {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+            .putString(PREF_GID, picked.id).putString(PREF_GNAME, picked.name).apply();
+        Smtu.touchRecent(this, picked.id, picked.name);
+        groupId = picked.id;
+        groupName = picked.name;
+        anchor = Dates.monday(Dates.today());
+        dayOffset = (Dates.today().get(Calendar.DAY_OF_WEEK) + 5) % 7;
+        load();
     }
 
     private void applyFilter(String q, List<Group> all, List<Group> filtered, android.widget.ArrayAdapter<String> adapter) {
