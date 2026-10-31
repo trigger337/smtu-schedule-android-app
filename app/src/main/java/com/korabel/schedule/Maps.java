@@ -35,25 +35,28 @@ final class Maps {
         new Building("М", "Псковская ул., 23", null),
     };
 
-    /** "509 Корпус Г" / "каф.ИЯ Корпус У" -> building entry, or null. */
+    /** "У 107" / "509 Корпус Г" / "каф.ИЯ Корпус У" -> building entry, or null. */
     static Building ofRoom(String room) {
-        if (room == null) return null;
-        int i = room.indexOf("Корпус");
-        if (i < 0) return null;
-        for (int j = i + 6; j < room.length(); j++) {
-            char c = room.charAt(j);
-            if (c >= 'А' && c <= 'Я') {
-                String letter = String.valueOf(c);
-                for (Building b : TABLE) if (b.letter.equals(letter)) return b;
-                return null;
+        if (room == null || room.isEmpty()) return null;
+        for (Building b : TABLE) {
+            if (room.startsWith(b.letter + " ") || room.equals(b.letter)) return b;
+            int i = room.indexOf("Корпус");
+            if (i >= 0) {
+                int j = room.indexOf(b.letter, i + 6);
+                if (j >= 0) return b;
             }
         }
         return null;
     }
 
-    /** Floor from the leading room number: "509 Корпус Г" -> 5; "каф.ИЯ…" -> -1. */
+    /** Floor from room number: "У 107" -> 1; "509 Корпус Г" -> 5; "каф.ИЯ…" -> -1. */
     static int floorOf(String room) {
-        for (int i = 0; i < room.length(); i++) {
+        if (room == null) return -1;
+        int start = 0;
+        if (room.length() >= 3 && Character.isLetter(room.charAt(0)) && room.charAt(1) == ' ') {
+            start = 2;
+        }
+        for (int i = start; i < room.length(); i++) {
             char c = room.charAt(i);
             if (c >= '0' && c <= '9') return c - '0';
             if (c == ' ') break;

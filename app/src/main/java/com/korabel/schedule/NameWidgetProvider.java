@@ -134,12 +134,32 @@ public final class NameWidgetProvider extends AppWidgetProvider {
         return "через " + m + " мин";
     }
 
-    /** "ауд. 509" / "ауд. 167 (У)"; empty when the slot has no room. */
-    private static String audOf(Slot s) {
-        if (s == null) return "";
-        String r = Now.roomFirst(s.room);
-        if (r.isEmpty()) return "";
-        Maps.Building b = Maps.ofRoom(s.room);
-        return "ауд. " + r + (b != null ? " (" + b.letter + ")" : "");
+    /** Formats room: "ауд. 107 (У)", "ауд. 340 (А)", "Конгресс-Центр", etc. */
+    static String audOf(Slot s) {
+        if (s == null || s.room == null || s.room.isEmpty()) return "";
+        String r = s.room.trim();
+        Maps.Building b = Maps.ofRoom(r);
+
+        if (b != null && r.startsWith(b.letter + " ")) {
+            String num = r.substring(b.letter.length() + 1).trim();
+            if (num.matches("\\d+.*")) return "ауд. " + num + " (" + b.letter + ")";
+            return num + " (" + b.letter + ")";
+        }
+
+        int ci = r.indexOf("Корпус");
+        if (ci > 0) {
+            String num = r.substring(0, ci).trim();
+            return "ауд. " + num + (b != null ? " (" + b.letter + ")" : "");
+        }
+
+        if (r.matches("\\d+.*")) {
+            return "ауд. " + r + (b != null ? " (" + b.letter + ")" : "");
+        }
+
+        int sp = r.indexOf(' ');
+        if (sp > 0 && r.length() > 18) {
+            return r.substring(0, sp);
+        }
+        return r;
     }
 }
