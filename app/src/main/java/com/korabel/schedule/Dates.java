@@ -27,6 +27,30 @@ final class Dates {
             && t.get(Calendar.DAY_OF_YEAR) == c.get(Calendar.DAY_OF_YEAR);
     }
 
+    static int dayDiffFromToday(Calendar c) {
+        Calendar t = today();
+        Calendar d = (Calendar) c.clone();
+        d.set(Calendar.HOUR_OF_DAY, 0);
+        d.set(Calendar.MINUTE, 0);
+        d.set(Calendar.SECOND, 0);
+        d.set(Calendar.MILLISECOND, 0);
+        long diffMs = d.getTimeInMillis() - t.getTimeInMillis();
+        return (int) Math.round((double) diffMs / 86400000.0);
+    }
+
+    /** "позавчера" (-2), "вчера" (-1), "сегодня" (0), "завтра" (+1), "послезавтра" (+2), or null. */
+    static String relativeDayTag(Calendar c) {
+        int diff = dayDiffFromToday(c);
+        switch (diff) {
+            case -2: return "позавчера";
+            case -1: return "вчера";
+            case 0: return "сегодня";
+            case 1: return "завтра";
+            case 2: return "послезавтра";
+            default: return null;
+        }
+    }
+
     /** Monday 00:00 of the week containing c. */
     static Calendar monday(Calendar c) {
         Calendar r = (Calendar) c.clone();

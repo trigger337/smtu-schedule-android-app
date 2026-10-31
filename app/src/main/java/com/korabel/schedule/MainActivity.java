@@ -324,8 +324,12 @@ public final class MainActivity extends Activity {
 
     private String rangeText() {
         SimpleDateFormat df = new SimpleDateFormat("d MMMM", RU);
-        if (dayMode)
-            return new SimpleDateFormat("d MMMM, EEEE", Dates.RU).format(Dates.plus(anchor, dayOffset).getTime());
+        if (dayMode) {
+            Calendar d = Dates.plus(anchor, dayOffset);
+            String s = new SimpleDateFormat("d MMMM, EEEE", Dates.RU).format(d.getTime());
+            String rel = Dates.relativeDayTag(d);
+            return rel != null ? s + " (" + rel + ")" : s;
+        }
         String a = df.format(anchor.getTime());
         String b = df.format(Dates.plus(anchor, 6).getTime());
         return sameMonth(anchor, Dates.plus(anchor, 6)) ? a.split(" ")[0] + " – " + b : a + " – " + b;
@@ -400,7 +404,9 @@ public final class MainActivity extends Activity {
             TextView tv = (convert instanceof TextView) ? (TextView) convert : new TextView(MainActivity.this);
             String label = new SimpleDateFormat("EEEE, d MMMM", RU).format(r.day.getTime());
             label = Character.toUpperCase(label.charAt(0)) + label.substring(1);
-            tv.setText(label + (r.today ? "  •  сегодня" : ""));
+            String rel = Dates.relativeDayTag(r.day);
+            if (rel != null) label += "  •  " + rel;
+            tv.setText(label);
             tv.setTextSize(13);
             tv.setTypeface(Typeface.DEFAULT_BOLD);
             tv.setTextColor(getColor(R.color.text_muted));
