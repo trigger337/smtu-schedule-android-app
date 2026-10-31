@@ -68,6 +68,7 @@ public final class MainActivity extends Activity {
     private ListView list;                 // primary page; the pager swaps in the alt one
     private DayPager pager;
     private Button btnMode;
+    private Button btnToday;
     private Button btnWarn;
 
     // the backdrop band moves once a minute — re-draw visible rows in place
@@ -207,6 +208,16 @@ public final class MainActivity extends Activity {
         wp.leftMargin = dp(8);
         row2.addView(tvWeek, wp);
 
+        btnToday = new Button(this);
+        btnToday.setText("Сегодня");
+        btnToday.setTextSize(12);
+        btnToday.setAllCaps(false);
+        btnToday.setPadding(dp(8), 0, dp(8), 0);
+        btnToday.setOnClickListener(v -> jumpToToday());
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, dp(36));
+        tp.leftMargin = dp(8);
+        row2.addView(btnToday, tp);
+
         Button refresh = new Button(this);
         refresh.setText("⟳");
         refresh.setTextSize(16);
@@ -320,6 +331,19 @@ public final class MainActivity extends Activity {
 
         boolean stale = Smtu.isScheduleStale(this, false, groupId);
         btnWarn.setVisibility(stale ? View.VISIBLE : View.GONE);
+
+        boolean isCurrentWeek = Dates.today().getTimeInMillis() >= anchor.getTimeInMillis()
+                && Dates.today().getTimeInMillis() < Dates.plus(anchor, 7).getTimeInMillis();
+        boolean isCurrentDay = isCurrentWeek && dayOffset == (Dates.today().get(Calendar.DAY_OF_WEEK) + 5) % 7;
+        boolean onToday = dayMode ? isCurrentDay : isCurrentWeek;
+        btnToday.setTypeface(onToday ? Typeface.DEFAULT : Typeface.DEFAULT_BOLD);
+        btnToday.setTextColor(onToday ? getColor(R.color.text_meta) : getColor(R.color.time));
+    }
+
+    private void jumpToToday() {
+        anchor = Dates.monday(Dates.today());
+        dayOffset = (Dates.today().get(Calendar.DAY_OF_WEEK) + 5) % 7;
+        render();
     }
 
     private String rangeText() {
