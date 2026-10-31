@@ -16,23 +16,31 @@ final class Maps {
 
     static final class Building {
         final String letter, address, url;
+        final double lat, lon;
 
-        Building(String letter, String address, String url) {
+        Building(String letter, String address, String url, double lat, double lon) {
             this.letter = letter;
             this.address = address;
             this.url = url;
+            this.lat = lat;
+            this.lon = lon;
         }
     }
 
     private static final Building[] TABLE = {
         new Building("А", "Лоцманская ул., 3",
-            "https://isu.smtu.ru/doc_tree_file/9340022def0eb135cfe16946c8e678a262a93545ddb0ddbfa3cfcabeec27ce4a/"),
+            "https://isu.smtu.ru/doc_tree_file/9340022def0eb135cfe16946c8e678a262a93545ddb0ddbfa3cfcabeec27ce4a/",
+            59.9189, 30.2858),
         new Building("Б", "Лоцманская ул., 10-14",
-            "https://isu.smtu.ru/doc_tree_file/e556fc798afbfcab2900f2966edc78ad69a1d7660e1f00c381cdd8d7a73b4551/"),
+            "https://isu.smtu.ru/doc_tree_file/e556fc798afbfcab2900f2966edc78ad69a1d7660e1f00c381cdd8d7a73b4551/",
+            59.9196, 30.2842),
         new Building("У", "Ленинский пр., 101",
-            "https://isu.smtu.ru/doc_tree_file/50c1eeb37e952c41b6737c1acccdc1c1b39cea4a604e750df94649707029de15/"),
-        new Building("Г", "Кронверкский пр., 5", null),
-        new Building("М", "Псковская ул., 23", null),
+            "https://isu.smtu.ru/doc_tree_file/50c1eeb37e952c41b6737c1acccdc1c1b39cea4a604e750df94649707029de15/",
+            59.8549, 30.2458),
+        new Building("Г", "Кронверкский пр., 5", null,
+            59.9547, 30.3204),
+        new Building("М", "Псковская ул., 23", null,
+            59.9171, 30.2829),
     };
 
     /** "У 107" / "509 Корпус Г" / "каф.ИЯ Корпус У" -> building entry, or null. */
@@ -70,21 +78,39 @@ final class Maps {
         return "Корпус " + b.letter + (fl > 0 ? ", " + fl + " этаж" : "");
     }
 
-    /** Open the building's plan on the university site, or the address dialog. */
+    /** Open the building dialog with both map and floor plan options. */
     static void show(final Activity a, final Building b) {
-        if (b.url != null) {
-            try {
-                a.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(b.url)));
-            } catch (Exception e) {
-                Toast.makeText(a, "Не найден браузер", Toast.LENGTH_SHORT).show();
-            }
-            return;
-        }
-        new AlertDialog.Builder(a)
+        AlertDialog.Builder builder = new AlertDialog.Builder(a)
                 .setTitle("Корпус " + b.letter)
                 .setMessage("Адрес: " + b.address
-                        + "\n\nПоэтажные планы этого корпуса не опубликованы.")
-                .setPositiveButton("Закрыть", null)
-                .show();
+                        + (b.url != null ? "\n\nДоступен официальный поэтажный план." : "\n\nПоэтажные планы этого корпуса не опубликованы."))
+                .setPositiveButton("На карте", (d, w) -> openMap(a, b))
+                .setNegativeButton("Закрыть", null);
+
+        if (b.url != null) {
+            builder.setNeutralButton("Поэтажный план", (d, w) -> {
+                try {
+                    a.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(b.url)));
+                } catch (Exception e) {
+                    Toast.makeText(a, "Не найден браузер", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+        builder.show();
+    }
+
+    static void openMap(Activity a, Building b) {
+        try {
+            Uri uri = Uri.parse("geo:" + b.lat + "," + b.lon + "?q=" + Uri.encode(b.address + ", Санкт-Петербург"));
+            Intent mapIntent = new Intent(Intent.ACTION_VIEW, uri);
+            a.startActivity(mapIntent);
+        } catch (Exception e) {
+            try {
+                Uri webUri = Uri.parse("https://yandex.ru/maps/?text=" + Uri.encode(b.address + ", Санкт-Петербург"));
+                a.startActivity(new Intent(Intent.ACTION_VIEW, webUri));
+            } catch (Exception e2) {
+                Toast.makeText(a, "Не удалось открыть карты", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 }

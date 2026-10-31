@@ -772,7 +772,7 @@ public final class MainActivity extends Activity {
         CharSequence message = m;
         if (bld != null) {
             String line = "\n\n🗺 " + Maps.label(bld, s.room)
-                    + (bld.url != null ? " — на карте" : " — как добраться");
+                    + (bld.url != null ? " — адрес и план" : " — адрес и на карте");
             android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(m);
             int at = sb.length();
             sb.append(line);
