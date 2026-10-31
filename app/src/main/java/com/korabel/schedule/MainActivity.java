@@ -29,6 +29,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.OverScroller;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -69,7 +70,9 @@ public final class MainActivity extends Activity {
     private DayPager pager;
     private Button btnMode;
     private Button btnToday;
+    private Button btnRefresh;
     private Button btnWarn;
+    private ProgressBar progressBar;
 
     // the backdrop band moves once a minute — re-draw visible rows in place
     private final Handler ticker = new Handler();
@@ -132,12 +135,22 @@ public final class MainActivity extends Activity {
 
     private void refresh() {
         if (groupId == null) { showGroupPicker(); return; }
+        setLoading(true);
         Smtu.schedule(this, false, groupId, (result, error) -> {
+            setLoading(false);
             slots = result;
             render();
             if (error != null) toast(error);
             WidgetUpdater.poke(this);
         });
+    }
+
+    private void setLoading(boolean loading) {
+        if (progressBar != null) progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
+        if (btnRefresh != null) {
+            btnRefresh.setEnabled(!loading);
+            btnRefresh.setAlpha(loading ? 0.4f : 1.0f);
+        }
     }
 
     // ------------------------------------------------------------------- ui
@@ -218,14 +231,14 @@ public final class MainActivity extends Activity {
         tp.leftMargin = dp(8);
         row2.addView(btnToday, tp);
 
-        Button refresh = new Button(this);
-        refresh.setText("⟳");
-        refresh.setTextSize(16);
-        refresh.setPadding(0, 0, 0, 0);
-        refresh.setOnClickListener(v -> refresh());
+        btnRefresh = new Button(this);
+        btnRefresh.setText("⟳");
+        btnRefresh.setTextSize(16);
+        btnRefresh.setPadding(0, 0, 0, 0);
+        btnRefresh.setOnClickListener(v -> refresh());
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(dp(36), dp(36));
         rp.leftMargin = dp(8);
-        row2.addView(refresh, rp);
+        row2.addView(btnRefresh, rp);
 
         View gap = new View(this);
         row2.addView(gap, new LinearLayout.LayoutParams(0, 1, 1f));
@@ -253,6 +266,12 @@ public final class MainActivity extends Activity {
         dayStrip = new LinearLayout(this);
         dayStrip.setOrientation(LinearLayout.HORIZONTAL);
         header.addView(dayStrip, new LinearLayout.LayoutParams(-1, -2));
+
+        progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progressBar.setIndeterminate(true);
+        progressBar.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.time)));
+        progressBar.setVisibility(View.GONE);
+        root.addView(progressBar, new LinearLayout.LayoutParams(-1, dp(4)));
 
         FrameLayout body = new FrameLayout(this);
         root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1f));
@@ -905,6 +924,11 @@ public final class MainActivity extends Activity {
         search.setHint("Поиск группы, например 12826-61");
         box.addView(search, new LinearLayout.LayoutParams(-1, -2));
 
+        final ProgressBar groupProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        groupProgress.setIndeterminate(true);
+        groupProgress.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.time)));
+        box.addView(groupProgress, new LinearLayout.LayoutParams(-1, dp(4)));
+
         final List<Group> all = new ArrayList<>();
         final List<Group> filtered = new ArrayList<>();
         ListView lv = new ListView(this);
@@ -937,6 +961,7 @@ public final class MainActivity extends Activity {
         dlgRef[0].show();
 
         Smtu.groups(this, (groups, error) -> {
+            groupProgress.setVisibility(View.GONE);
             if (groups.isEmpty()) { toast(error != null ? error : "Список групп недоступен"); return; }
             all.clear();
             all.addAll(groups);
