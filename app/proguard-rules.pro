@@ -1,2 +1,4 @@
-# No custom rules needed: the app uses no reflection and no third-party
-# libraries. android.* and org.json classes are provided by the platform.
+# R8 aggressive optimization and repackaging
+-repackageclasses 'a'
+-allowaccessmodification
+-optimizationpasses 5
