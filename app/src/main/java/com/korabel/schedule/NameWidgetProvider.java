@@ -37,11 +37,14 @@ public final class NameWidgetProvider extends AppWidgetProvider {
     }
 
     static RemoteViews render(Context app, AppWidgetManager awm, int id) {
+        return render(app, awm, id, Now.load(app));
+    }
+
+    static RemoteViews render(Context app, AppWidgetManager awm, int id, Now.State st) {
         Bundle o = awm.getAppWidgetOptions(id);
         boolean h = WidgetArt.isHorizontal(o);
         RemoteViews rv = new RemoteViews(app.getPackageName(),
                 h ? R.layout.widget_name_h : R.layout.widget_name);
-        Now.State st = Now.load(app);
         float d = app.getResources().getDisplayMetrics().density;
 
         String label, extra = "";

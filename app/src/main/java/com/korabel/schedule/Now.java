@@ -4,7 +4,6 @@ import android.content.Context;
 
 import com.korabel.schedule.Smtu.Slot;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -87,7 +86,7 @@ public final class Now {
 
     /** "среда" — lowercase ru weekday name. */
     public static String weekdayName(Calendar c) {
-        return new SimpleDateFormat("EEEE", Dates.RU).format(c.getTime());
+        return Dates.dayName(c);
     }
 
     /** Lesson-card backdrop: band color resource + colored share of the card. */

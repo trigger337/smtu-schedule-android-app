@@ -21,8 +21,11 @@ public final class TimerWidgetProvider extends AppWidgetProvider {
     }
 
     static RemoteViews render(Context app) {
+        return render(app, Now.load(app));
+    }
+
+    static RemoteViews render(Context app, Now.State st) {
         RemoteViews rv = new RemoteViews(app.getPackageName(), R.layout.widget_timer);
-        Now.State st = Now.load(app);
 
         int col = WidgetArt.ringColorRes(st);
         rv.setViewVisibility(R.id.wt_ring_b, col == R.color.w_ring_lesson ? View.VISIBLE : View.GONE);

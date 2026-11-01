@@ -41,7 +41,6 @@ import com.korabel.schedule.Smtu.Callback;
 import com.korabel.schedule.Smtu.Group;
 import com.korabel.schedule.Smtu.Slot;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -440,16 +439,17 @@ public final class MainActivity extends Activity {
     }
 
     private String rangeText() {
-        SimpleDateFormat df = new SimpleDateFormat("d MMMM", RU);
         if (dayMode) {
             Calendar d = Dates.plus(anchor, dayOffset);
-            String s = new SimpleDateFormat("d MMMM, EEEE", Dates.RU).format(d.getTime());
+            String s = Dates.formatDayMonthWeekday(d);
             String rel = Dates.relativeDayTag(d);
             return rel != null ? s + " (" + rel + ")" : s;
         }
-        String a = df.format(anchor.getTime());
-        String b = df.format(Dates.plus(anchor, 6).getTime());
-        return sameMonth(anchor, Dates.plus(anchor, 6)) ? a.split(" ")[0] + " – " + b : a + " – " + b;
+        Calendar end = Dates.plus(anchor, 6);
+        if (sameMonth(anchor, end)) {
+            return anchor.get(Calendar.DAY_OF_MONTH) + " – " + Dates.formatDayMonth(end);
+        }
+        return Dates.formatDayMonth(anchor) + " – " + Dates.formatDayMonth(end);
     }
 
     private static boolean sameMonth(Calendar a, Calendar b) {
@@ -504,6 +504,16 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private static final class LessonHolder {
+        final TextView time;
+        final TextView subj;
+        final TextView meta;
+        final TextView room;
+        LessonHolder(TextView t, TextView s, TextView m, TextView r) {
+            time = t; subj = s; meta = m; room = r;
+        }
+    }
+
     private final class RowsAdapter extends BaseAdapter {
         private final List<Row> rows;
         RowsAdapter(List<Row> rows) { this.rows = rows; }
@@ -511,6 +521,8 @@ public final class MainActivity extends Activity {
         @Override public int getCount() { return rows.size(); }
         @Override public Object getItem(int i) { return rows.get(i); }
         @Override public long getItemId(int i) { return i; }
+        @Override public int getViewTypeCount() { return 2; }
+        @Override public int getItemViewType(int i) { return rows.get(i).slot == null ? 0 : 1; }
 
         @Override public View getView(int i, View convert, ViewGroup parent) {
             Row r = rows.get(i);
@@ -519,8 +531,7 @@ public final class MainActivity extends Activity {
 
         private View headerView(Row r, View convert) {
             TextView tv = (convert instanceof TextView) ? (TextView) convert : new TextView(MainActivity.this);
-            String label = new SimpleDateFormat("EEEE, d MMMM", RU).format(r.day.getTime());
-            label = Character.toUpperCase(label.charAt(0)) + label.substring(1);
+            String label = Dates.formatHeader(r.day);
             String rel = Dates.relativeDayTag(r.day);
             if (rel != null) label += "  •  " + rel;
             tv.setText(label);
@@ -534,8 +545,12 @@ public final class MainActivity extends Activity {
 
         private View lessonView(final Row r, View convert) {
             final Slot s = r.slot;
-            LinearLayout row = (convert instanceof LinearLayout) ? (LinearLayout) convert : null;
-            if (row == null) {
+            LinearLayout row;
+            LessonHolder holder;
+            if (convert instanceof LinearLayout && convert.getTag() instanceof LessonHolder) {
+                row = (LinearLayout) convert;
+                holder = (LessonHolder) convert.getTag();
+            } else {
                 row = new LinearLayout(MainActivity.this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setGravity(Gravity.CENTER_VERTICAL);
@@ -543,7 +558,6 @@ public final class MainActivity extends Activity {
                 row.setBackground(new FillDrawable());   // translucent backdrop, see applyFill
 
                 TextView time = new TextView(MainActivity.this);
-                time.setId(1);
                 time.setTextSize(13);
                 time.setTextColor(getColor(R.color.time));
                 time.setTypeface(Typeface.DEFAULT_BOLD);
@@ -552,45 +566,43 @@ public final class MainActivity extends Activity {
                 row.addView(time, new LinearLayout.LayoutParams(dp(52), -2));
 
                 LinearLayout mid = new LinearLayout(MainActivity.this);
-                mid.setId(2);
                 mid.setOrientation(LinearLayout.VERTICAL);
                 row.addView(mid, new LinearLayout.LayoutParams(0, -2, 1f));
 
                 TextView subj = new TextView(MainActivity.this);
-                subj.setId(3);
                 subj.setTextSize(15);
                 subj.setTextColor(getColor(R.color.text_primary));
                 mid.addView(subj);
 
                 TextView meta = new TextView(MainActivity.this);
-                meta.setId(4);
                 meta.setTextSize(12);
                 meta.setTextColor(getColor(R.color.text_meta));
                 mid.addView(meta);
 
                 TextView room = new TextView(MainActivity.this);
-                room.setId(5);
                 room.setTextSize(12);
                 room.setTextColor(getColor(R.color.text_muted));
                 room.setGravity(Gravity.END);
                 row.addView(room, new LinearLayout.LayoutParams(dp(64), -2));
+
+                holder = new LessonHolder(time, subj, meta, room);
+                row.setTag(holder);
             }
-            TextView time = row.findViewById(1), subj = row.findViewById(3),
-                     meta = row.findViewById(4), room = row.findViewById(5);
+
             // time as three compact centered lines: start / – / end
             String[] t = s.time.split(" - ");
             if (t.length == 2) {
                 SpannableString ts = new SpannableString(t[0] + "\n–\n" + t[1]);
                 ts.setSpan(new RelativeSizeSpan(0.7f), t[0].length() + 1, t[0].length() + 2, 0);
-                time.setText(ts, TextView.BufferType.SPANNABLE);
+                holder.time.setText(ts, TextView.BufferType.SPANNABLE);
             } else {
-                time.setText(s.time);
+                holder.time.setText(s.time);
             }
-            subj.setText(s.subject);
-            meta.setText(s.teacher.isEmpty() ? s.type : s.type + " · " + s.teacher);
+            holder.subj.setText(s.subject);
+            holder.meta.setText(s.teacher.isEmpty() ? s.type : s.type + " · " + s.teacher);
             // room as two lines: number/label over building
             int sp = s.room.indexOf(' ');
-            room.setText(sp > 0 ? s.room.substring(0, sp) + "\n" + s.room.substring(sp + 1) : s.room);
+            holder.room.setText(sp > 0 ? s.room.substring(0, sp) + "\n" + s.room.substring(sp + 1) : s.room);
             applyFill(r, row);
             row.setOnClickListener(v -> showLesson(s, r.day));
             row.setOnLongClickListener(v -> {

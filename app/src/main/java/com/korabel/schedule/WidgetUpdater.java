@@ -27,18 +27,24 @@ public final class WidgetUpdater {
 
     /** Re-render every bound widget and reschedule the next tick. */
     public static void poke(Context ctx) {
-        render(ctx);
-        schedule(ctx);
+        Context app = ctx.getApplicationContext();
+        Now.State st = Now.load(app);
+        render(app, st);
+        schedule(app, st);
     }
 
     /** Push fresh RemoteViews to every bound widget. */
     public static void render(Context ctx) {
         Context app = ctx.getApplicationContext();
+        render(app, Now.load(app));
+    }
+
+    public static void render(Context app, Now.State st) {
         AppWidgetManager awm = AppWidgetManager.getInstance(app);
         int[] ids = awm.getAppWidgetIds(new ComponentName(app, TimerWidgetProvider.class));
-        for (int id : ids) awm.updateAppWidget(id, TimerWidgetProvider.render(app));
+        for (int id : ids) awm.updateAppWidget(id, TimerWidgetProvider.render(app, st));
         int[] nameIds = awm.getAppWidgetIds(new ComponentName(app, NameWidgetProvider.class));
-        for (int id : nameIds) awm.updateAppWidget(id, NameWidgetProvider.render(app, awm, id));
+        for (int id : nameIds) awm.updateAppWidget(id, NameWidgetProvider.render(app, awm, id, st));
         if (ids.length + nameIds.length > 0) maybeRefresh(app);
     }
 
@@ -58,9 +64,12 @@ public final class WidgetUpdater {
     }
 
     /** Alarm for the next state change; per-minute only during a lesson / short break. */
-    static void schedule(Context ctx) {
-        final Context app = ctx.getApplicationContext();
-        Now.State st = Now.load(app);
+    public static void schedule(Context ctx) {
+        Context app = ctx.getApplicationContext();
+        schedule(app, Now.load(app));
+    }
+
+    static void schedule(Context app, Now.State st) {
         if (st.gid == null) return;   // nothing scheduled without a group
 
         long now = System.currentTimeMillis();

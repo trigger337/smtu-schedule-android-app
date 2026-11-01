@@ -1,6 +1,5 @@
 package com.korabel.schedule;
 
-import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Locale;
 
@@ -8,6 +7,15 @@ import java.util.Locale;
 final class Dates {
 
     static final Locale RU = new Locale("ru");
+
+    private static final String[] RU_DAYS = {
+        "воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"
+    };
+
+    private static final String[] RU_MONTHS = {
+        "января", "февраля", "марта", "апреля", "мая", "июня",
+        "июля", "августа", "сентября", "октября", "ноября", "декабря"
+    };
 
     private Dates() { }
 
@@ -29,13 +37,13 @@ final class Dates {
 
     static int dayDiffFromToday(Calendar c) {
         Calendar t = today();
-        Calendar d = (Calendar) c.clone();
-        d.set(Calendar.HOUR_OF_DAY, 0);
-        d.set(Calendar.MINUTE, 0);
-        d.set(Calendar.SECOND, 0);
-        d.set(Calendar.MILLISECOND, 0);
-        long diffMs = d.getTimeInMillis() - t.getTimeInMillis();
-        return (int) Math.round((double) diffMs / 86400000.0);
+        int y1 = t.get(Calendar.YEAR);
+        int y2 = c.get(Calendar.YEAR);
+        if (y1 == y2) {
+            return c.get(Calendar.DAY_OF_YEAR) - t.get(Calendar.DAY_OF_YEAR);
+        }
+        long msDiff = c.getTimeInMillis() - t.getTimeInMillis();
+        return (int) Math.round((double) msDiff / 86400000.0);
     }
 
     /** "позавчера" (-2), "вчера" (-1), "сегодня" (0), "завтра" (+1), "послезавтра" (+2), or null. */
@@ -69,9 +77,26 @@ final class Dates {
         return r;
     }
 
-    /** "Понедельник" for a Calendar, to match Slot.day. */
+    /** "понедельник" for a Calendar, to match Slot.day. */
     static String dayName(Calendar c) {
-        return new SimpleDateFormat("EEEE", RU).format(c.getTime());
+        return RU_DAYS[c.get(Calendar.DAY_OF_WEEK) - 1];
+    }
+
+    /** "Понедельник, 26 октября" */
+    static String formatHeader(Calendar c) {
+        String d = dayName(c);
+        char first = Character.toUpperCase(d.charAt(0));
+        return first + d.substring(1) + ", " + c.get(Calendar.DAY_OF_MONTH) + " " + RU_MONTHS[c.get(Calendar.MONTH)];
+    }
+
+    /** "26 октября" */
+    static String formatDayMonth(Calendar c) {
+        return c.get(Calendar.DAY_OF_MONTH) + " " + RU_MONTHS[c.get(Calendar.MONTH)];
+    }
+
+    /** "26 октября, понедельник" */
+    static String formatDayMonthWeekday(Calendar c) {
+        return c.get(Calendar.DAY_OF_MONTH) + " " + RU_MONTHS[c.get(Calendar.MONTH)] + ", " + dayName(c);
     }
 
     static String shortDay(String day) {
