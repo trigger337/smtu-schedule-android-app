@@ -16,12 +16,16 @@ import android.text.TextWatcher;
 import android.text.method.LinkMovementMethod;
 import android.text.style.ClickableSpan;
 import android.text.style.RelativeSizeSpan;
+import android.content.res.Configuration;
+import android.os.Build;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -86,12 +90,14 @@ public final class MainActivity extends Activity {
     private boolean dayMode = false;
     private Calendar anchor = Dates.monday(Dates.today());      // Monday of shown week
     private int dayOffset = (Dates.today().get(Calendar.DAY_OF_WEEK) + 5) % 7; // Mon=0..Sun=6
+    private int insetTop = 0, insetBottom = 0, insetLeft = 0, insetRight = 0;
 
     private int dp(float v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(buildUi());
+        setupEdgeToEdge();
         SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
         groupId = p.getString(PREF_GID, null);
         groupName = p.getString(PREF_GNAME, groupId == null ? null : groupId);
@@ -103,6 +109,11 @@ public final class MainActivity extends Activity {
         }
         if (groupId == null) showGroupPicker(); else load();
         UpdateChecker.onLaunch(this);
+    }
+
+    @Override public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        syncSystemBarAppearance();
     }
 
     @Override protected void onSaveInstanceState(Bundle out) {
@@ -308,6 +319,37 @@ public final class MainActivity extends Activity {
         pager.addView(list, new FrameLayout.LayoutParams(-1, -1));
         body.addView(pager, new FrameLayout.LayoutParams(-1, -1));
         list.setEmptyView(tvEmpty);
+
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            int top, bottom, left, right;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.graphics.Insets bars = insets.getInsets(
+                        WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                top = bars.top;
+                bottom = bars.bottom;
+                left = bars.left;
+                right = bars.right;
+            } else {
+                top = insets.getSystemWindowInsetTop();
+                bottom = insets.getSystemWindowInsetBottom();
+                left = insets.getSystemWindowInsetLeft();
+                right = insets.getSystemWindowInsetRight();
+            }
+            insetTop = top;
+            insetBottom = bottom;
+            insetLeft = left;
+            insetRight = right;
+
+            header.setPadding(dp(8) + left, dp(10) + top, dp(8) + right, dp(8));
+            list.setPadding(dp(8) + left, 0, dp(8) + right, dp(16) + bottom);
+            if (pager != null && pager.alt != null) {
+                pager.alt.setPadding(dp(8) + left, 0, dp(8) + right, dp(16) + bottom);
+            }
+            if (tvEmpty != null) {
+                tvEmpty.setPadding(dp(24) + left, dp(24), dp(24) + right, dp(24) + bottom);
+            }
+            return insets;
+        });
 
         return root;
     }
@@ -609,7 +651,7 @@ public final class MainActivity extends Activity {
             if (alt == null) {
                 alt = new ListView(MainActivity.this);
                 alt.setDivider(null);
-                alt.setPadding(dp(8), 0, dp(8), dp(16));
+                alt.setPadding(dp(8) + insetLeft, 0, dp(8) + insetRight, dp(16) + insetBottom);
                 alt.setClipToPadding(false);
                 addView(alt, 1, new FrameLayout.LayoutParams(-1, -1));
             }
@@ -1183,6 +1225,60 @@ public final class MainActivity extends Activity {
         AlertDialog dlg = b.show();
         TextView body = dlg.findViewById(android.R.id.message);
         if (body != null) body.setMovementMethod(LinkMovementMethod.getInstance());
+    }
+
+    // ----------------------------------------------------------------- edge-to-edge
+
+    private void setupEdgeToEdge() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        }
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            getWindow().setStatusBarContrastEnforced(false);
+            getWindow().setNavigationBarContrastEnforced(false);
+        }
+        syncSystemBarAppearance();
+    }
+
+    private void syncSystemBarAppearance() {
+        boolean isNight = (getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                int flags = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                        | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                if (isNight) {
+                    controller.setSystemBarsAppearance(0, flags);
+                } else {
+                    controller.setSystemBarsAppearance(flags, flags);
+                }
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+            if (!isNight) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                      | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            }
+            getWindow().getDecorView().setSystemUiVisibility(flags);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+            if (!isNight) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            }
+            getWindow().getDecorView().setSystemUiVisibility(flags);
+        }
     }
 
     // ----------------------------------------------------------------- utils
