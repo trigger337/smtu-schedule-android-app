@@ -1,4 +1,4 @@
-# CI: debug APK on main pushes; on vX.Y.Z tags build release+debug and
+# CI: debug APK on main pushes; on version tags (YYYY.MM.PATCH or vYYYY.MM.PATCH) build release+debug and
 # publish both APKs as generic packages (app_release/app_debug) with the
 # versioned file names. The GitLab release itself is created manually.
 # Uses only CI_JOB_TOKEN — no PAT or CI variables.

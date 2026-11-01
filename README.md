@@ -170,8 +170,8 @@ Release собирается с R8-минификацией и сжатием р
 release-APK подписывается отладочным ключом: годится для личной установки,
 но не для публикации.
 
-CI (`.gitlab-ci.yml`) собирает debug на каждый push в main, а на теги
-`X.Y.Z` — release+debug, публикует оба APK в пакеты `app_release`/`app_debug`
+CI (`.gitlab-ci.yml`) собирает debug на каждый push в main, а на теги версий
+(формат CalVer `YYYY.MM.PATCH`, например `2026.11.0`) — release+debug, публикует оба APK в пакеты `app_release`/`app_debug`
 и создаёт релиз GitLab.
 
 ### Замечания
@@ -345,8 +345,8 @@ create a keystore and a `keystore.properties` in the project root (see
 Without it the release APK is signed with the debug key, which is fine for
 personal sideloading but not for publishing.
 
-CI (`.gitlab-ci.yml`) builds debug on every push to main; on `X.Y.Z` tags it
-builds release+debug, uploads both APKs to the `app_release`/`app_debug`
+CI (`.gitlab-ci.yml`) builds debug on every push to main; on version tags
+(CalVer `YYYY.MM.PATCH`, e.g. `2026.11.0`) it builds release+debug, uploads both APKs to the `app_release`/`app_debug`
 packages and creates the GitLab release.
 
 ### Notes

@@ -41,7 +41,12 @@ public final class UpdateChecker {
     private static final String P_APK_URL = "updApkUrl";
     private static final String P_TOASTS = "updToasts";
     private static final int MAX_TOASTS = 3;
-    private static final Handler UI = new Handler(Looper.getMainLooper());
+    private static final class UI {
+        private static final Handler HANDLER = new Handler(Looper.getMainLooper());
+        static void post(Runnable r) {
+            HANDLER.post(r);
+        }
+    }
 
     public static final class ReleaseInfo {
         public final String tag;
@@ -126,7 +131,7 @@ public final class UpdateChecker {
         return (u == null || u.isEmpty()) ? null : u;
     }
 
-    /** Semantic compare of x.y.z tags; true if a is newer than b. */
+    /** Semantic and calendar (CalVer) compare of version tags; true if a is newer than b. */
     public static boolean isNewer(String a, String b) {
         int[] x = parse(a), y = parse(b);
         if (x == null || y == null) return false;
@@ -134,18 +139,25 @@ public final class UpdateChecker {
     }
 
     private static int cmp(int[] a, int[] b) {
-        for (int i = 0; i < 3; i++) if (a[i] != b[i]) return a[i] > b[i] ? 1 : -1;
+        int len = Math.max(a.length, b.length);
+        for (int i = 0; i < len; i++) {
+            int va = i < a.length ? a[i] : 0;
+            int vb = i < b.length ? b[i] : 0;
+            if (va != vb) return va > vb ? 1 : -1;
+        }
         return 0;
     }
 
     private static int[] parse(String v) {
         if (v == null) return null;
-        Matcher m = Pattern.compile("^(\\d+)(?:\\.(\\d+))?(?:\\.(\\d+))?$").matcher(v.trim());
+        Matcher m = Pattern.compile("^v?(\\d+)(?:\\.(\\d+))?(?:\\.(\\d+))?(?:\\.(\\d+))?$",
+                Pattern.CASE_INSENSITIVE).matcher(v.trim());
         if (!m.matches()) return null;
-        return new int[]{
-                Integer.parseInt(m.group(1)),
-                m.group(2) == null ? 0 : Integer.parseInt(m.group(2)),
-                m.group(3) == null ? 0 : Integer.parseInt(m.group(3))};
+        int c1 = Integer.parseInt(m.group(1));
+        int c2 = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
+        int c3 = m.group(3) == null ? 0 : Integer.parseInt(m.group(3));
+        int c4 = m.group(4) == null ? 0 : Integer.parseInt(m.group(4));
+        return new int[]{c1, c2, c3, c4};
     }
 
     /** Newest release info across all releases; null on any failure. */
