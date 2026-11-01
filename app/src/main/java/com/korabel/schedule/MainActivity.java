@@ -1,23 +1,17 @@
 package com.korabel.schedule;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.text.Editable;
 import android.text.SpannableString;
-import android.text.TextWatcher;
-import android.text.method.LinkMovementMethod;
-import android.text.style.ClickableSpan;
 import android.text.style.RelativeSizeSpan;
-import android.content.res.Configuration;
-import android.os.Build;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
@@ -28,7 +22,6 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.BaseAdapter;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -37,7 +30,6 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.korabel.schedule.Smtu.Callback;
 import com.korabel.schedule.Smtu.Group;
 import com.korabel.schedule.Smtu.Slot;
 
@@ -861,217 +853,17 @@ public final class MainActivity extends Activity {
     // ---------------------------------------------------------------- dialogs
 
     private void showLesson(final Slot s, final Calendar day) {
-        StringBuilder m = new StringBuilder();
-        m.append(s.day).append(", ").append(s.time.replace(" - ", " – ")).append('\n')
-         .append(s.type);
-        if (!s.room.isEmpty()) m.append(" · ").append(s.room);
-        if (!s.group.isEmpty()) m.append('\n').append("Группа: ").append(s.group);
-        m.append('\n').append(s.upper ? "Верхняя" : "Нижняя").append(" неделя");
-        if (!s.dateRange.isEmpty()) m.append('\n').append('\n').append(s.dateRange);
-        if (!s.dates.isEmpty()) {
-            m.append('\n');
-            for (int i = 0; i < s.dates.size(); i++) {
-                if (i > 0) m.append(i % 4 == 0 ? '\n' : ", ");
-                m.append(s.dates.get(i));
-            }
-        }
-        if (!s.teacher.isEmpty()) m.append('\n').append('\n').append("Преподаватель: ").append(s.teacher);
-
-        final Maps.Building bld = Maps.ofRoom(s.room);
-        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(m);
-        if (bld != null) {
-            String line = "\n\n🗺 " + Maps.label(bld, s.room)
-                    + (bld.url != null ? " — адрес и план" : " — адрес и на карте");
-            int at = sb.length();
-            sb.append(line);
-            sb.setSpan(new ClickableSpan() {
-                @Override public void onClick(View widget) {
-                    Maps.show(MainActivity.this, bld);
-                }
-            }, at + 2, sb.length(), 0);
-        }
-
-        String calLine = "\n\n📅 В календарь устройства";
-        int calAt = sb.length();
-        sb.append(calLine);
-        sb.setSpan(new ClickableSpan() {
-            @Override public void onClick(View widget) {
-                addSlotToCalendar(s, day);
-            }
-        }, calAt + 2, sb.length(), 0);
-
-        AlertDialog.Builder b = new AlertDialog.Builder(this);
-        b.setTitle(s.subject);
-        b.setMessage(sb);
-        b.setNeutralButton("О предмете", (d, w) -> showSubject(s.subject));
-        if (!s.teacher.isEmpty())
-            b.setPositiveButton("Преподаватель", (d, w) -> showTeacher(s));
-        b.setNegativeButton("Закрыть", null);
-        AlertDialog dlg = b.show();
-        TextView body = dlg.findViewById(android.R.id.message);
-        if (body != null) body.setMovementMethod(LinkMovementMethod.getInstance());
+        ScheduleDialogs.showLesson(this, s, day, slots);
     }
 
     private void addSlotToCalendar(Slot s, Calendar day) {
-        try {
-            startActivity(CalendarExport.insertSlotIntent(s, day));
-        } catch (Exception e) {
-            toast("Не удалось открыть календарь: " + e.getMessage());
-        }
-    }
-
-    /** All occurrences of a subject in the loaded schedule. */
-    private void showSubject(String subject) {
-        List<Slot> of = new ArrayList<>();
-        for (Slot s : slots) if (s.subject.equals(subject)) of.add(s);
-        Collections.sort(of);
-        showSlotList(subject, of);
-    }
-
-    /**
-     * Teacher info: their full schedule across all groups, fetched from
-     * smtu.ru by the viewperson id found in the schedule page. Falls back to
-     * their lessons within this group's schedule.
-     */
-    private void showTeacher(Slot lesson) {
-        String teacher = lesson.teacher;
-        if (lesson.teacherId.isEmpty()) {
-            List<Slot> of = new ArrayList<>();
-            for (Slot s : slots) if (s.teacher.equals(teacher)) of.add(s);
-            Collections.sort(of);
-            showSlotList(teacher, of);
-            return;
-        }
-        final AlertDialog loading = new AlertDialog.Builder(this)
-                .setTitle(teacher)
-                .setMessage("Загрузка расписания преподавателя…")
-                .setNegativeButton("Закрыть", null).create();
-        loading.show();
-        Smtu.schedule(this, true, lesson.teacherId, (result, error) -> {
-            loading.dismiss();
-            List<Slot> toShow = (result != null && !result.isEmpty()) ? result : null;
-            if (toShow == null) {
-                toShow = new ArrayList<>();
-                for (Slot s : slots) if (s.teacher.equals(teacher)) toShow.add(s);
-                if (error != null) toast(error);
-            }
-            Collections.sort(toShow);
-            showSlotList(teacher, toShow);
-        });
-    }
-
-    private void showSlotList(String title, List<Slot> of) {
-        CharSequence[] items = new CharSequence[of.size()];
-        for (int i = 0; i < of.size(); i++) {
-            Slot s = of.get(i);
-            StringBuilder it = new StringBuilder();
-            if (!s.dates.isEmpty()) it.append(s.dates.get(0));
-            else it.append(Dates.shortDay(s.day));
-            it.append(" · ").append(s.time.replace(" - ", " – "))
-              .append(" · ").append(s.subject);
-            if (!s.type.isEmpty()) it.append(" (").append(s.type).append(")");
-            if (!s.group.isEmpty()) it.append(" · ").append(s.group);
-            if (!s.room.isEmpty()) it.append(" · ").append(s.room);
-            items[i] = it.toString();
-        }
-        AlertDialog.Builder b = new AlertDialog.Builder(this);
-        b.setTitle(title);
-        if (of.isEmpty()) b.setMessage("Занятий не найдено.");
-        else b.setItems(items, null);
-        b.setPositiveButton("Закрыть", null);
-        b.show();
+        ScheduleDialogs.addSlotToCalendar(this, s, day);
     }
 
     // ------------------------------------------------------------ group picker
 
     private void showGroupPicker() {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(16);
-        box.setPadding(pad, pad, pad, 0);
-
-        List<Group> recents = Smtu.recentGroups(this);
-        final AlertDialog[] dlgRef = new AlertDialog[1];
-
-        if (!recents.isEmpty()) {
-            TextView recTitle = new TextView(this);
-            recTitle.setText("Недавние группы:");
-            recTitle.setTextSize(12);
-            recTitle.setTextColor(getColor(R.color.text_meta));
-            box.addView(recTitle, new LinearLayout.LayoutParams(-1, -2));
-
-            android.widget.HorizontalScrollView hsv = new android.widget.HorizontalScrollView(this);
-            hsv.setHorizontalScrollBarEnabled(false);
-            LinearLayout recRow = new LinearLayout(this);
-            recRow.setOrientation(LinearLayout.HORIZONTAL);
-            for (final Group g : recents) {
-                Button chip = new Button(this);
-                chip.setText(g.name);
-                chip.setTextSize(12);
-                chip.setAllCaps(false);
-                chip.setPadding(dp(10), dp(4), dp(10), dp(4));
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(36));
-                lp.rightMargin = dp(6);
-                chip.setOnClickListener(v -> {
-                    if (dlgRef[0] != null) dlgRef[0].dismiss();
-                    selectGroup(g);
-                });
-                recRow.addView(chip, lp);
-            }
-            hsv.addView(recRow, new FrameLayout.LayoutParams(-2, -2));
-            LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(-1, -2);
-            hlp.topMargin = dp(4);
-            hlp.bottomMargin = dp(8);
-            box.addView(hsv, hlp);
-        }
-
-        EditText search = new EditText(this);
-        search.setHint("Поиск группы, например 12826-61");
-        box.addView(search, new LinearLayout.LayoutParams(-1, -2));
-
-        final ProgressBar groupProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        groupProgress.setIndeterminate(true);
-        groupProgress.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.time)));
-        box.addView(groupProgress, new LinearLayout.LayoutParams(-1, dp(4)));
-
-        final List<Group> all = new ArrayList<>();
-        final List<Group> filtered = new ArrayList<>();
-        ListView lv = new ListView(this);
-        box.addView(lv, new LinearLayout.LayoutParams(-1, dp(280)));
-
-        final android.widget.ArrayAdapter<String> adapter =
-                new android.widget.ArrayAdapter<>(this, android.R.layout.simple_list_item_1, new ArrayList<>());
-        lv.setAdapter(adapter);
-
-        search.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int a, int b2, int c) { }
-            @Override public void onTextChanged(CharSequence s, int a, int b2, int c) { }
-            @Override public void afterTextChanged(Editable e) {
-                applyFilter(e.toString(), all, filtered, adapter);
-            }
-        });
-
-        dlgRef[0] = new AlertDialog.Builder(this)
-                .setTitle("Ваша группа")
-                .setView(box)
-                .setNegativeButton("Отмена", null)
-                .create();
-
-        lv.setOnItemClickListener((parent, view, pos, id) -> {
-            Group picked = filtered.get(pos);
-            dlgRef[0].dismiss();
-            selectGroup(picked);
-        });
-
-        dlgRef[0].show();
-
-        Smtu.groups(this, (groups, error) -> {
-            groupProgress.setVisibility(View.GONE);
-            if (groups.isEmpty()) { toast(error != null ? error : "Список групп недоступен"); return; }
-            all.clear();
-            all.addAll(groups);
-            applyFilter(search.getText().toString(), all, filtered, adapter);
-        });
+        GroupPicker.show(this, this::selectGroup);
     }
 
     private void selectGroup(Group picked) {
@@ -1085,97 +877,16 @@ public final class MainActivity extends Activity {
         load();
     }
 
-    private void applyFilter(String q, List<Group> all, List<Group> filtered, android.widget.ArrayAdapter<String> adapter) {
-        q = q.trim().toLowerCase(RU);
-        filtered.clear();
-        for (Group g : all)
-            if (q.isEmpty() || g.name.toLowerCase(RU).contains(q)) filtered.add(g);
-        List<String> names = new ArrayList<>(filtered.size());
-        for (Group g : filtered) names.add(g.name);
-        adapter.clear();
-        adapter.addAll(names);
-        adapter.notifyDataSetChanged();
-    }
-
     // ------------------------------------------------------------------ about
 
     private void showInfo() {
-        String latest = UpdateChecker.latestKnown(this);
-        final boolean newer = latest != null
-                && UpdateChecker.isNewer(latest, BuildConfig.VERSION_NAME);
-        String upd = newer ? "доступна версия " + latest
-                : latest == null ? "ещё не проверялось"
-                : "установлена последняя версия";
-        String link = "gitlab.com/trigger337/smtu-schedule-android-app";
-        String calExport = "📅 Экспорт расписания в календарь (.ics)";
-        String text = "Расписание СПбГМТУ " + BuildConfig.VERSION_NAME
-                + " (сборка " + BuildConfig.BUILD_DATE + ")\n\n"
-                + "Неофициальное приложение-просмотрщик расписания. Все данные "
-                + "загружаются напрямую с www.smtu.ru — официального сайта "
-                + "университета — при запуске и по кнопке ⟳, после чего "
-                + "работают офлайн из кэша на устройстве.\n\n"
-                + "Верхняя/нижняя неделя определяется автоматически по данным "
-                + "сайта.\n\n"
-                + "Тап по названию группы вверху — смена группы.\n\n"
-                + "Календарь: " + calExport + "\n\n"
-                + "Исходный код: " + link + "\n\n"
-                + "Обновления: " + upd + ".";
-        SpannableString msg = new SpannableString(text);
-        int ls = text.indexOf(link);
-        if (ls >= 0) {
-            msg.setSpan(new ClickableSpan() {
-                @Override public void onClick(View widget) {
-                    try {
-                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.REPO_URL)));
-                    } catch (Exception e) {
-                        toast("Браузер не найден");
-                    }
-                }
-            }, ls, ls + link.length(), 0);
-        }
-        int cs = text.indexOf(calExport);
-        if (cs >= 0) {
-            msg.setSpan(new ClickableSpan() {
-                @Override public void onClick(View widget) {
-                    showExportDialog();
-                }
-            }, cs, cs + calExport.length(), 0);
-        }
-
-        AlertDialog.Builder b = new AlertDialog.Builder(this)
-                .setTitle("О приложении")
-                .setMessage(msg);
-        if (newer) {
-            b.setPositiveButton("Скачать", (d, w) -> startActivity(new Intent(
-                    Intent.ACTION_VIEW, Uri.parse(UpdateChecker.RELEASES_URL))));
-            b.setNegativeButton("Закрыть", null);
-        } else {
-            b.setPositiveButton("Закрыть", null);
-        }
-        b.setNeutralButton("Проверить", (d, w) -> UpdateChecker.checkNow(this));
-        AlertDialog dlg = b.show();
-        TextView body = dlg.findViewById(android.R.id.message);
-        if (body != null) body.setMovementMethod(LinkMovementMethod.getInstance());
+        ScheduleDialogs.showAbout(this, this::showExportDialog);
     }
 
     private static final int REQ_SAVE_ICS = 101;
 
     private void showExportDialog() {
-        if (slots == null || slots.isEmpty()) {
-            toast("Расписание не загружено");
-            return;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("Экспорт в календарь")
-                .setItems(new CharSequence[] {
-                        "Сохранить файл .ics (импорт в любой календарь)",
-                        "Поделиться расписанием"
-                }, (d, which) -> {
-                    if (which == 0) saveIcsDocument();
-                    else shareIcs();
-                })
-                .setNegativeButton("Отмена", null)
-                .show();
+        ScheduleDialogs.showExportDialog(this, slots, this::saveIcsDocument, this::shareIcs);
     }
 
     private void saveIcsDocument() {
@@ -1218,40 +929,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showSyncWarning() {
-        final String url = Smtu.getScheduleUrl(false, groupId);
-        String text = "Расписание не удается обновить более суток из-за проблем с сетью или блокировки подключения.\n\n"
-                + "Отображаются сохраненные ранее данные, которые могут быть неактуальны.\n\n"
-                + "Актуальное расписание на сайте университета:\n"
-                + url;
-        SpannableString msg = new SpannableString(text);
-        int ls = text.indexOf(url);
-        if (ls >= 0) {
-            msg.setSpan(new ClickableSpan() {
-                @Override public void onClick(View widget) {
-                    try {
-                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
-                    } catch (Exception e) {
-                        toast("Браузер не найден");
-                    }
-                }
-            }, ls, ls + url.length(), 0);
-        }
-
-        AlertDialog.Builder b = new AlertDialog.Builder(this)
-                .setTitle("Расписание устарело")
-                .setMessage(msg)
-                .setPositiveButton("Открыть сайт", (d, w) -> {
-                    try {
-                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
-                    } catch (Exception e) {
-                        toast("Браузер не найден");
-                    }
-                })
-                .setNegativeButton("Закрыть", null);
-
-        AlertDialog dlg = b.show();
-        TextView body = dlg.findViewById(android.R.id.message);
-        if (body != null) body.setMovementMethod(LinkMovementMethod.getInstance());
+        ScheduleDialogs.showSyncWarning(this, groupId);
     }
 
     // ----------------------------------------------------------------- edge-to-edge
