@@ -194,14 +194,21 @@ public final class MainActivity extends Activity {
         row1.addView(title, new LinearLayout.LayoutParams(0, -2, 1f));
         row1.addView(next, new LinearLayout.LayoutParams(dp(48), dp(48)));
 
+        android.widget.HorizontalScrollView scrollRow2 = new android.widget.HorizontalScrollView(this);
+        scrollRow2.setHorizontalScrollBarEnabled(false);
+        scrollRow2.setFillViewport(true);
+        header.addView(scrollRow2, new LinearLayout.LayoutParams(-1, -2));
+
         LinearLayout row2 = new LinearLayout(this);
         row2.setGravity(Gravity.CENTER_VERTICAL);
-        header.addView(row2, new LinearLayout.LayoutParams(-1, -2));
+        scrollRow2.addView(row2, new FrameLayout.LayoutParams(-1, -2));
 
         btnMode = new Button(this);
         btnMode.setTextSize(13);
         btnMode.setAllCaps(false);
-        btnMode.setPadding(dp(12), 0, dp(12), 0);
+        btnMode.setMinWidth(0);
+        btnMode.setMinimumWidth(0);
+        btnMode.setPadding(dp(8), 0, dp(8), 0);
         btnMode.setOnClickListener(v -> {
             dayMode = !dayMode;
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(PREF_DAY, dayMode).apply();
@@ -212,56 +219,66 @@ public final class MainActivity extends Activity {
         tvWeek = new TextView(this);
         tvWeek.setTextSize(12);
         tvWeek.setTypeface(Typeface.DEFAULT_BOLD);
-        tvWeek.setPadding(dp(12), dp(4), dp(12), dp(4));
+        tvWeek.setPadding(dp(8), dp(4), dp(8), dp(4));
         tvWeek.setOnClickListener(v -> {
             anchor.add(Calendar.DAY_OF_YEAR, 7);
             render();
         });
         LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-2, -2);
-        wp.leftMargin = dp(8);
+        wp.leftMargin = dp(6);
         row2.addView(tvWeek, wp);
 
         btnToday = new Button(this);
         btnToday.setText("Сегодня");
         btnToday.setTextSize(12);
         btnToday.setAllCaps(false);
+        btnToday.setMinWidth(0);
+        btnToday.setMinimumWidth(0);
         btnToday.setPadding(dp(8), 0, dp(8), 0);
         btnToday.setOnClickListener(v -> jumpToToday());
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, dp(36));
-        tp.leftMargin = dp(8);
+        tp.leftMargin = dp(6);
         row2.addView(btnToday, tp);
+
+        View gap = new View(this);
+        row2.addView(gap, new LinearLayout.LayoutParams(0, 1, 1f));
 
         btnRefresh = new Button(this);
         btnRefresh.setText("⟳");
         btnRefresh.setTextSize(16);
+        btnRefresh.setMinWidth(0);
+        btnRefresh.setMinimumWidth(0);
         btnRefresh.setPadding(0, 0, 0, 0);
         btnRefresh.setOnClickListener(v -> refresh());
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(dp(36), dp(36));
-        rp.leftMargin = dp(8);
+        rp.leftMargin = dp(6);
         row2.addView(btnRefresh, rp);
-
-        View gap = new View(this);
-        row2.addView(gap, new LinearLayout.LayoutParams(0, 1, 1f));
 
         btnWarn = new Button(this);
         btnWarn.setText("⚠");
         btnWarn.setTextSize(16);
         btnWarn.setTextColor(Color.WHITE);
         btnWarn.setBackgroundColor(getColor(R.color.warn_red));
+        btnWarn.setMinWidth(0);
+        btnWarn.setMinimumWidth(0);
         btnWarn.setPadding(0, 0, 0, 0);
         btnWarn.setVisibility(View.GONE);
         btnWarn.setOnClickListener(v -> showSyncWarning());
         LinearLayout.LayoutParams warnLp = new LinearLayout.LayoutParams(dp(36), dp(36));
-        warnLp.rightMargin = dp(8);
+        warnLp.leftMargin = dp(6);
         row2.addView(btnWarn, warnLp);
 
         Button info = new Button(this);
         info.setText("ⓘ");
         info.setTextSize(16);
         info.setAllCaps(false);
+        info.setMinWidth(0);
+        info.setMinimumWidth(0);
         info.setPadding(0, 0, 0, 0);
         info.setOnClickListener(v -> showInfo());
-        row2.addView(info, new LinearLayout.LayoutParams(dp(36), dp(36)));
+        LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(dp(36), dp(36));
+        infoLp.leftMargin = dp(6);
+        row2.addView(info, infoLp);
 
         dayStrip = new LinearLayout(this);
         dayStrip.setOrientation(LinearLayout.HORIZONTAL);
