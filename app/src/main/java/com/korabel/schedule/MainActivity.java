@@ -535,7 +535,11 @@ public final class MainActivity extends Activity {
             int sp = s.room.indexOf(' ');
             room.setText(sp > 0 ? s.room.substring(0, sp) + "\n" + s.room.substring(sp + 1) : s.room);
             applyFill(r, row);
-            row.setOnClickListener(v -> showLesson(s));
+            row.setOnClickListener(v -> showLesson(s, r.day));
+            row.setOnLongClickListener(v -> {
+                addSlotToCalendar(s, r.day);
+                return true;
+            });
             return row;
         }
     }
@@ -787,7 +791,7 @@ public final class MainActivity extends Activity {
 
     // ---------------------------------------------------------------- dialogs
 
-    private void showLesson(Slot s) {
+    private void showLesson(final Slot s, final Calendar day) {
         StringBuilder m = new StringBuilder();
         m.append(s.day).append(", ").append(s.time.replace(" - ", " – ")).append('\n')
          .append(s.type);
@@ -805,31 +809,46 @@ public final class MainActivity extends Activity {
         if (!s.teacher.isEmpty()) m.append('\n').append('\n').append("Преподаватель: ").append(s.teacher);
 
         final Maps.Building bld = Maps.ofRoom(s.room);
-        CharSequence message = m;
+        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(m);
         if (bld != null) {
             String line = "\n\n🗺 " + Maps.label(bld, s.room)
                     + (bld.url != null ? " — адрес и план" : " — адрес и на карте");
-            android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(m);
             int at = sb.length();
             sb.append(line);
             sb.setSpan(new ClickableSpan() {
                 @Override public void onClick(View widget) {
                     Maps.show(MainActivity.this, bld);
                 }
-            }, at, sb.length(), 0);
-            message = sb;
+            }, at + 2, sb.length(), 0);
         }
+
+        String calLine = "\n\n📅 В календарь устройства";
+        int calAt = sb.length();
+        sb.append(calLine);
+        sb.setSpan(new ClickableSpan() {
+            @Override public void onClick(View widget) {
+                addSlotToCalendar(s, day);
+            }
+        }, calAt + 2, sb.length(), 0);
 
         AlertDialog.Builder b = new AlertDialog.Builder(this);
         b.setTitle(s.subject);
-        b.setMessage(message);
+        b.setMessage(sb);
         b.setNeutralButton("О предмете", (d, w) -> showSubject(s.subject));
         if (!s.teacher.isEmpty())
             b.setPositiveButton("Преподаватель", (d, w) -> showTeacher(s));
         b.setNegativeButton("Закрыть", null);
         AlertDialog dlg = b.show();
         TextView body = dlg.findViewById(android.R.id.message);
-        if (body != null && bld != null) body.setMovementMethod(LinkMovementMethod.getInstance());
+        if (body != null) body.setMovementMethod(LinkMovementMethod.getInstance());
+    }
+
+    private void addSlotToCalendar(Slot s, Calendar day) {
+        try {
+            startActivity(CalendarExport.insertSlotIntent(s, day));
+        } catch (Exception e) {
+            toast("Не удалось открыть календарь: " + e.getMessage());
+        }
     }
 
     /** All occurrences of a subject in the loaded schedule. */
@@ -1019,6 +1038,7 @@ public final class MainActivity extends Activity {
                 : latest == null ? "ещё не проверялось"
                 : "установлена последняя версия";
         String link = "gitlab.com/trigger337/smtu-schedule-android-app";
+        String calExport = "📅 Экспорт расписания в календарь (.ics)";
         String text = "Расписание СПбГМТУ " + BuildConfig.VERSION_NAME
                 + " (сборка " + BuildConfig.BUILD_DATE + ")\n\n"
                 + "Неофициальное приложение-просмотрщик расписания. Все данные "
@@ -1028,19 +1048,30 @@ public final class MainActivity extends Activity {
                 + "Верхняя/нижняя неделя определяется автоматически по данным "
                 + "сайта.\n\n"
                 + "Тап по названию группы вверху — смена группы.\n\n"
+                + "Календарь: " + calExport + "\n\n"
                 + "Исходный код: " + link + "\n\n"
                 + "Обновления: " + upd + ".";
         SpannableString msg = new SpannableString(text);
         int ls = text.indexOf(link);
-        msg.setSpan(new ClickableSpan() {
-            @Override public void onClick(View widget) {
-                try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.REPO_URL)));
-                } catch (Exception e) {
-                    toast("Браузер не найден");
+        if (ls >= 0) {
+            msg.setSpan(new ClickableSpan() {
+                @Override public void onClick(View widget) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.REPO_URL)));
+                    } catch (Exception e) {
+                        toast("Браузер не найден");
+                    }
                 }
-            }
-        }, ls, ls + link.length(), 0);
+            }, ls, ls + link.length(), 0);
+        }
+        int cs = text.indexOf(calExport);
+        if (cs >= 0) {
+            msg.setSpan(new ClickableSpan() {
+                @Override public void onClick(View widget) {
+                    showExportDialog();
+                }
+            }, cs, cs + calExport.length(), 0);
+        }
 
         AlertDialog.Builder b = new AlertDialog.Builder(this)
                 .setTitle("О приложении")
@@ -1056,6 +1087,65 @@ public final class MainActivity extends Activity {
         AlertDialog dlg = b.show();
         TextView body = dlg.findViewById(android.R.id.message);
         if (body != null) body.setMovementMethod(LinkMovementMethod.getInstance());
+    }
+
+    private static final int REQ_SAVE_ICS = 101;
+
+    private void showExportDialog() {
+        if (slots == null || slots.isEmpty()) {
+            toast("Расписание не загружено");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Экспорт в календарь")
+                .setItems(new CharSequence[] {
+                        "Сохранить файл .ics (импорт в любой календарь)",
+                        "Поделиться расписанием"
+                }, (d, which) -> {
+                    if (which == 0) saveIcsDocument();
+                    else shareIcs();
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private void saveIcsDocument() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("text/calendar");
+            String fname = "Расписание_" + (groupName != null ? groupName : "СПбГМТУ") + ".ics";
+            intent.putExtra(Intent.EXTRA_TITLE, fname);
+            startActivityForResult(intent, REQ_SAVE_ICS);
+        } catch (Exception e) {
+            shareIcs();
+        }
+    }
+
+    private void shareIcs() {
+        try {
+            String ics = CalendarExport.buildIcs(this, groupName, slots);
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("text/calendar");
+            send.putExtra(Intent.EXTRA_SUBJECT, "Расписание " + (groupName != null ? groupName : "СПбГМТУ"));
+            send.putExtra(Intent.EXTRA_TEXT, ics);
+            startActivity(Intent.createChooser(send, "Экспорт расписания"));
+        } catch (Exception e) {
+            toast("Не удалось отправить: " + e.getMessage());
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_SAVE_ICS && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            try (java.io.OutputStream os = getContentResolver().openOutputStream(data.getData())) {
+                String ics = CalendarExport.buildIcs(this, groupName, slots);
+                os.write(ics.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                toast("Файл расписания .ics успешно сохранён");
+            } catch (Exception e) {
+                toast("Ошибка сохранения: " + e.getMessage());
+            }
+        }
     }
 
     private void showSyncWarning() {
