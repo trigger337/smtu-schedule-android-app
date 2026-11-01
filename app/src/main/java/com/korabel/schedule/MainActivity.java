@@ -114,6 +114,7 @@ public final class MainActivity extends Activity {
     @Override public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         syncSystemBarAppearance();
+        WidgetUpdater.poke(this);
     }
 
     @Override protected void onSaveInstanceState(Bundle out) {

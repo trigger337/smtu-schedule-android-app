@@ -3,6 +3,7 @@ package com.korabel.schedule;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.Context;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.RemoteViews;
@@ -77,7 +78,11 @@ public final class NameWidgetProvider extends AppWidgetProvider {
 
         if (h) {
             rv.setTextViewText(R.id.wn_label, label);
-            rv.setTextColor(R.id.wn_label, app.getColor(accent));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                rv.setColor(R.id.wn_label, "setTextColor", accent);
+            } else {
+                rv.setTextColor(R.id.wn_label, app.getColor(accent));
+            }
             rv.setTextViewText(R.id.wn_subject, shown == null ? "" : shown.subject);
             rv.setTextViewText(R.id.wn_time, shown == null ? "" : Now.compactTime(shown.time));
             String teacher = shown == null ? "" : shown.teacher;
@@ -88,8 +93,12 @@ public final class NameWidgetProvider extends AppWidgetProvider {
             rv.setViewVisibility(R.id.wn_teacher,
                     teacher.isEmpty() && room.isEmpty() ? View.GONE : View.VISIBLE);
             rv.setTextViewText(R.id.wn_extra, extra);
-            rv.setTextColor(R.id.wn_extra,
-                    app.getColor(st.kind == Now.AFTER ? R.color.w_sub : accent));
+            int extraColor = st.kind == Now.AFTER ? R.color.w_sub : accent;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                rv.setColor(R.id.wn_extra, "setTextColor", extraColor);
+            } else {
+                rv.setTextColor(R.id.wn_extra, app.getColor(extraColor));
+            }
 
             // the bar shares its row with the extra line
             int barDp = WidgetArt.widthDp(o, 180) - 14 - (extra.isEmpty() ? 0 : 74);
