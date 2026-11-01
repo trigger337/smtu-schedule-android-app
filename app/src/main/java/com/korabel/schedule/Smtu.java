@@ -658,6 +658,27 @@ public final class Smtu {
      * wipe offline. Teacher schedules are cache-only.
      */
 
+    private static String sCachedId = null;
+    private static boolean sCachedTeacher = false;
+    private static long sCacheFileMod = 0;
+    private static List<Slot> sMemoryCache = null;
+
+    private static synchronized List<Slot> getMemoryCache(boolean teacher, String id, File f) {
+        if (sMemoryCache != null && id != null && id.equals(sCachedId) && teacher == sCachedTeacher) {
+            if (f != null && f.exists() && f.lastModified() == sCacheFileMod) {
+                return new ArrayList<>(sMemoryCache);
+            }
+        }
+        return null;
+    }
+
+    private static synchronized void setMemoryCache(boolean teacher, String id, File f, List<Slot> slots) {
+        sCachedId = id;
+        sCachedTeacher = teacher;
+        sCacheFileMod = (f != null && f.exists()) ? f.lastModified() : 0;
+        sMemoryCache = new ArrayList<>(slots);
+    }
+
     private static List<Slot> mergeAndStore(Context ctx, boolean teacher, String id, List<Slot> fresh) {
         Map<String, Slot> byKey = new TreeMap<>();
         for (Slot s : readSlotCache(ctx, teacher, id)) byKey.put(s.key(), s);
@@ -669,6 +690,7 @@ public final class Smtu {
             for (Slot s : all) arr.put(s.toJson());
             File c = schedFile(ctx, teacher, id);
             write(c, new JSONObject().put("slots", arr).toString());
+            setMemoryCache(teacher, id, c, all);
             if (!teacher && recents(ctx).contains(id))
                 mirror(c, dataFile(ctx, id));
         } catch (Exception ignored) { }
@@ -676,11 +698,21 @@ public final class Smtu {
     }
 
     private static List<Slot> readSlotCache(Context ctx, boolean teacher, String id) {
-        List<Slot> out = readSlotsFrom(schedFile(ctx, teacher, id));
-        if (!out.isEmpty() || teacher) return out;
+        File f = schedFile(ctx, teacher, id);
+        List<Slot> mem = getMemoryCache(teacher, id, f);
+        if (mem != null) return mem;
+
+        List<Slot> out = readSlotsFrom(f);
+        if (!out.isEmpty() || teacher) {
+            setMemoryCache(teacher, id, f, out);
+            return out;
+        }
         File d = dataFile(ctx, id);                    // cache wiped: fall back to the
         out = readSlotsFrom(d);                        // durable mirror and restore the
-        if (!out.isEmpty()) mirror(d, schedFile(ctx, false, id)); // cache from it
+        if (!out.isEmpty()) {
+            mirror(d, f); // cache from it
+            setMemoryCache(teacher, id, f, out);
+        }
         return out;
     }
 
@@ -856,12 +888,17 @@ public final class Smtu {
     }
 
     private static String read(File f) throws IOException {
-        BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8));
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = r.readLine()) != null) sb.append(line);
-        r.close();
-        return sb.toString();
+        int len = (int) f.length();
+        byte[] buf = new byte[len];
+        try (FileInputStream fis = new FileInputStream(f)) {
+            int read = 0;
+            while (read < len) {
+                int r = fis.read(buf, read, len - read);
+                if (r < 0) break;
+                read += r;
+            }
+            return new String(buf, 0, read, StandardCharsets.UTF_8);
+        }
     }
 
     // ------------------------------------------------------------------ utils

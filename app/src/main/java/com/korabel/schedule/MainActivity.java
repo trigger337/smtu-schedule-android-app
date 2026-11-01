@@ -107,8 +107,18 @@ public final class MainActivity extends Activity {
             anchor.setTimeInMillis(savedInstanceState.getLong("anchor"));
             dayOffset = savedInstanceState.getInt("off");
         }
-        if (groupId == null) showGroupPicker(); else load();
-        UpdateChecker.onLaunch(this);
+        if (groupId == null) {
+            showGroupPicker();
+        } else {
+            loadFromCache();
+            getWindow().getDecorView().postDelayed(() -> {
+                if (!isFinishing() && !isDestroyed()) {
+                    refresh();
+                    WidgetUpdater.poke(this);
+                    UpdateChecker.onLaunch(this);
+                }
+            }, 300);
+        }
     }
 
     @Override public void onConfigurationChanged(Configuration newConfig) {
@@ -138,11 +148,15 @@ public final class MainActivity extends Activity {
     // ------------------------------------------------------------------- data
 
     private void load() {
+        loadFromCache();
+        refresh();
+        WidgetUpdater.poke(this);
+    }
+
+    private void loadFromCache() {
         slots = Smtu.loadCacheSync(this, false, groupId);
         tvGroup.setText(groupName);
         render();          // instant from cache...
-        refresh();         // ...then silently update from the network
-        WidgetUpdater.poke(this);
     }
 
     private void refresh() {
