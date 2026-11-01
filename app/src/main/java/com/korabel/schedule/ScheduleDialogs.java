@@ -196,8 +196,13 @@ public final class ScheduleDialogs {
         b.setTitle("О приложении");
         b.setMessage(msg);
         if (newer) {
-            b.setPositiveButton("Скачать", (d, w) -> activity.startActivity(new Intent(
-                    Intent.ACTION_VIEW, Uri.parse(UpdateChecker.RELEASES_URL))));
+            final String apkUrl = UpdateChecker.latestApkUrl(activity);
+            if (apkUrl != null && !apkUrl.isEmpty() && !apkUrl.endsWith("/releases/" + latest)) {
+                b.setPositiveButton("Обновить", (d, w) -> UpdateChecker.downloadAndInstall(activity, apkUrl, latest));
+            } else {
+                b.setPositiveButton("Скачать", (d, w) -> activity.startActivity(new Intent(
+                        Intent.ACTION_VIEW, Uri.parse(UpdateChecker.RELEASES_URL))));
+            }
             b.setNegativeButton("Закрыть", null);
         } else {
             b.setPositiveButton("Закрыть", null);
